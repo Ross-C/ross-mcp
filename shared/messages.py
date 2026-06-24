@@ -29,6 +29,11 @@ class CommandType(str, Enum):
     UPDATE_EVENT = "update_event"
     CANCEL_EVENT = "cancel_event"
     FIND_AVAILABLE_SLOTS = "find_available_slots"
+    # Apple Notes
+    SEARCH_NOTES = "search_notes"
+    GET_NOTE = "get_note"
+    CREATE_NOTE = "create_note"
+    LIST_NOTE_FOLDERS = "list_note_folders"
     PING = "ping"
 
 
@@ -165,6 +170,28 @@ class FindAvailableSlotsPayload(BaseModel):
     start: datetime
     end: datetime
     duration_minutes: int = 30
+
+
+# --- Apple Notes Payloads ---
+
+class SearchNotesPayload(BaseModel):
+    query: str
+    folder: str | None = None
+    top: int = 20
+
+
+class GetNotePayload(BaseModel):
+    note_id: str
+
+
+class CreateNotePayload(BaseModel):
+    title: str
+    body: str
+    folder: str | None = None
+
+
+class ListNoteFoldersPayload(BaseModel):
+    pass
 
 
 # --- Messages ---

@@ -41,11 +41,16 @@ from shared.messages import (
     UpdateEventPayload,
     CancelEventPayload,
     FindAvailableSlotsPayload,
+    SearchNotesPayload,
+    GetNotePayload,
+    CreateNotePayload,
+    ListNoteFoldersPayload,
 )
 from agent.services.reminders import RemindersService
 from agent.services.outlook_auth import OutlookAuth
 from agent.services.outlook_mail import OutlookMailService
 from agent.services.outlook_calendar import OutlookCalendarService
+from agent.services.notes import NotesService
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(levelname)s: %(message)s")
@@ -61,6 +66,7 @@ class Agent:
         self.outlook_auth = OutlookAuth()
         self.mail = OutlookMailService(self.outlook_auth)
         self.calendar = OutlookCalendarService(self.outlook_auth)
+        self.notes = NotesService()
         self._running = True
 
     async def connect(self):
@@ -76,6 +82,10 @@ class Agent:
                         CommandType.CREATE_REMINDER,
                         CommandType.LIST_REMINDERS,
                         CommandType.COMPLETE_REMINDER,
+                        CommandType.SEARCH_NOTES,
+                        CommandType.GET_NOTE,
+                        CommandType.CREATE_NOTE,
+                        CommandType.LIST_NOTE_FOLDERS,
                         CommandType.PING,
                     ]
                     if self.outlook_auth.is_authenticated:
@@ -199,6 +209,18 @@ class Agent:
                 case CommandType.FIND_AVAILABLE_SLOTS:
                     p = FindAvailableSlotsPayload(**cmd.payload)
                     result = await self.calendar.find_available_slots(start=p.start, end=p.end, duration_minutes=p.duration_minutes)
+                # --- Apple Notes ---
+                case CommandType.SEARCH_NOTES:
+                    p = SearchNotesPayload(**cmd.payload)
+                    result = self.notes.search_notes(query=p.query, folder=p.folder, top=p.top)
+                case CommandType.GET_NOTE:
+                    p = GetNotePayload(**cmd.payload)
+                    result = self.notes.get_note(note_id=p.note_id)
+                case CommandType.CREATE_NOTE:
+                    p = CreateNotePayload(**cmd.payload)
+                    result = self.notes.create_note(title=p.title, body=p.body, folder=p.folder)
+                case CommandType.LIST_NOTE_FOLDERS:
+                    result = self.notes.list_folders()
                 case CommandType.PING:
                     result = {"pong": True, "agent": self.agent_name}
                 case _:

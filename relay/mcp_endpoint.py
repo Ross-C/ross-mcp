@@ -465,6 +465,67 @@ async def find_available_slots(
     return json.dumps(result, indent=2)
 
 
+# --- Apple Notes Tools ---
+
+
+@mcp.tool()
+async def search_notes(
+    query: str,
+    folder: str | None = None,
+    top: int = 20,
+) -> str:
+    """Search Apple Notes by title or body content.
+
+    Args:
+        query: Search term (case-insensitive, matches title or body)
+        folder: Optional folder name to search within
+        top: Max results (default 20)
+    """
+    payload: dict = {"query": query, "top": top}
+    if folder:
+        payload["folder"] = folder
+    result = await _send("search_notes", payload)
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def get_note(note_id: str) -> str:
+    """Get the full content of an Apple Note by ID.
+
+    Args:
+        note_id: The note ID (from search_notes)
+    """
+    result = await _send("get_note", {"note_id": note_id})
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def create_note(
+    title: str,
+    body: str,
+    folder: str | None = None,
+) -> str:
+    """Create a new Apple Note.
+
+    Args:
+        title: The note title
+        body: The note body (plain text)
+        folder: Optional folder name (defaults to Notes)
+    """
+    payload: dict = {"title": title, "body": body}
+    if folder:
+        payload["folder"] = folder
+    result = await _send("create_note", payload)
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def list_note_folders() -> str:
+    """List all Apple Notes folders."""
+    result = await _send("list_note_folders")
+    return json.dumps(result, indent=2)
+
+
 def create_mcp_app() -> BearerTokenMiddleware:
     """Create the MCP Starlette app with Bearer token auth.
 
