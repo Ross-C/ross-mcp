@@ -24,7 +24,22 @@ logger = logging.getLogger("relay")
 
 API_KEY = os.getenv("RELAY_API_KEY", "")
 
-app = FastAPI(title="Ross MCP Relay", version="0.1.0")
+from contextlib import asynccontextmanager
+
+
+@asynccontextmanager
+async def lifespan(app):
+    # Start the MCP session manager (sub-app lifespans don't auto-run)
+    from relay.mcp_endpoint import get_session_manager
+    sm = get_session_manager()
+    if sm:
+        async with sm.run():
+            yield
+    else:
+        yield
+
+
+app = FastAPI(title="Ross MCP Relay", version="0.1.0", lifespan=lifespan)
 security = HTTPBearer()
 
 
@@ -110,11 +125,12 @@ class CommandRequest(BaseModel):
     payload: dict = {}
 
 
-@app.post("/api/command")
-async def send_command(
-    request: CommandRequest,
-    _: str = Depends(verify_api_key),
-):
+async def execute_command(command_type: CommandType, payload: dict) -> dict:
+    """Route a command to an agent and return the response dict.
+
+    Shared by the HTTP API and the MCP endpoint.
+    Raises HTTPException on failure.
+    """
     if not agents:
         raise HTTPException(status_code=503, detail="No agents connected")
 
@@ -124,11 +140,10 @@ async def send_command(
 
     cmd = Command(
         id=str(uuid.uuid4()),
-        type=request.type,
-        payload=request.payload,
+        type=command_type,
+        payload=payload,
     )
 
-    # Create a future for the response
     loop = asyncio.get_event_loop()
     future: asyncio.Future[Response] = loop.create_future()
     agent.pending_responses[cmd.id] = future
@@ -153,6 +168,14 @@ async def send_command(
         raise HTTPException(status_code=504, detail="Agent did not respond in time")
     finally:
         agent.pending_responses.pop(cmd.id, None)
+
+
+@app.post("/api/command")
+async def send_command(
+    request: CommandRequest,
+    _: str = Depends(verify_api_key),
+):
+    return await execute_command(request.type, request.payload)
 
 
 # --- Status & Dashboard ---
@@ -287,6 +310,13 @@ DASHBOARD_HTML = """
 </body>
 </html>
 """
+
+
+# --- Mount remote MCP endpoint ---
+
+from relay.mcp_endpoint import create_mcp_app
+
+app.mount("/mcp", create_mcp_app())
 
 
 if __name__ == "__main__":

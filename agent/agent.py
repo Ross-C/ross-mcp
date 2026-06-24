@@ -26,8 +26,26 @@ from shared.messages import (
     CreateReminderPayload,
     ListRemindersPayload,
     CompleteReminderPayload,
+    SearchEmailsPayload,
+    GetEmailPayload,
+    GetThreadPayload,
+    CreateDraftPayload,
+    UpdateDraftPayload,
+    SendDraftPayload,
+    SendEmailPayload,
+    ScheduleSendPayload,
+    CancelScheduledSendPayload,
+    ArchiveEmailPayload,
+    ListEventsPayload,
+    CreateEventPayload,
+    UpdateEventPayload,
+    CancelEventPayload,
+    FindAvailableSlotsPayload,
 )
 from agent.services.reminders import RemindersService
+from agent.services.outlook_auth import OutlookAuth
+from agent.services.outlook_mail import OutlookMailService
+from agent.services.outlook_calendar import OutlookCalendarService
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(levelname)s: %(message)s")
@@ -40,6 +58,9 @@ class Agent:
         self.api_key = os.getenv("AGENT_API_KEY", "")
         self.agent_name = os.getenv("AGENT_NAME", platform.node())
         self.reminders = RemindersService()
+        self.outlook_auth = OutlookAuth()
+        self.mail = OutlookMailService(self.outlook_auth)
+        self.calendar = OutlookCalendarService(self.outlook_auth)
         self._running = True
 
     async def connect(self):
@@ -51,15 +72,34 @@ class Agent:
                 logger.info(f"Connecting to relay at {self.relay_url}")
                 async with websockets.connect(self.relay_url, additional_headers=headers) as ws:
                     # Register with relay
+                    capabilities = [
+                        CommandType.CREATE_REMINDER,
+                        CommandType.LIST_REMINDERS,
+                        CommandType.COMPLETE_REMINDER,
+                        CommandType.PING,
+                    ]
+                    if self.outlook_auth.is_authenticated:
+                        capabilities.extend([
+                            CommandType.SEARCH_EMAILS,
+                            CommandType.GET_EMAIL,
+                            CommandType.GET_THREAD,
+                            CommandType.CREATE_DRAFT,
+                            CommandType.UPDATE_DRAFT,
+                            CommandType.SEND_DRAFT,
+                            CommandType.SEND_EMAIL,
+                            CommandType.SCHEDULE_SEND,
+                            CommandType.CANCEL_SCHEDULED_SEND,
+                            CommandType.ARCHIVE_EMAIL,
+                            CommandType.LIST_EVENTS,
+                            CommandType.CREATE_EVENT,
+                            CommandType.UPDATE_EVENT,
+                            CommandType.CANCEL_EVENT,
+                            CommandType.FIND_AVAILABLE_SLOTS,
+                        ])
                     reg = AgentRegistration(
                         agent_name=self.agent_name,
                         machine_name=platform.node(),
-                        capabilities=[
-                            CommandType.CREATE_REMINDER,
-                            CommandType.LIST_REMINDERS,
-                            CommandType.COMPLETE_REMINDER,
-                            CommandType.PING,
-                        ],
+                        capabilities=capabilities,
                     )
                     await ws.send(reg.model_dump_json())
                     logger.info(f"Registered as '{self.agent_name}'")
@@ -106,6 +146,59 @@ class Agent:
                     result = self.reminders.complete_reminder(
                         reminder_id=payload.reminder_id,
                     )
+                # --- Outlook Email ---
+                case CommandType.SEARCH_EMAILS:
+                    p = SearchEmailsPayload(**cmd.payload)
+                    result = await self.mail.search_emails(query=p.query, folder=p.folder, top=p.top)
+                case CommandType.GET_EMAIL:
+                    p = GetEmailPayload(**cmd.payload)
+                    result = await self.mail.get_email(message_id=p.message_id)
+                case CommandType.GET_THREAD:
+                    p = GetThreadPayload(**cmd.payload)
+                    result = await self.mail.get_thread(conversation_id=p.conversation_id, top=p.top)
+                case CommandType.CREATE_DRAFT:
+                    p = CreateDraftPayload(**cmd.payload)
+                    result = await self.mail.create_draft(subject=p.subject, body=p.body, to=p.to, cc=p.cc, body_type=p.body_type)
+                case CommandType.UPDATE_DRAFT:
+                    p = UpdateDraftPayload(**cmd.payload)
+                    result = await self.mail.update_draft(message_id=p.message_id, subject=p.subject, body=p.body, to=p.to, cc=p.cc, body_type=p.body_type)
+                case CommandType.SEND_DRAFT:
+                    p = SendDraftPayload(**cmd.payload)
+                    result = await self.mail.send_draft(message_id=p.message_id)
+                case CommandType.SEND_EMAIL:
+                    p = SendEmailPayload(**cmd.payload)
+                    result = await self.mail.send_email(subject=p.subject, body=p.body, to=p.to, cc=p.cc, body_type=p.body_type)
+                case CommandType.SCHEDULE_SEND:
+                    p = ScheduleSendPayload(**cmd.payload)
+                    result = await self.mail.schedule_send(subject=p.subject, body=p.body, to=p.to, send_at=p.send_at, cc=p.cc, body_type=p.body_type)
+                case CommandType.CANCEL_SCHEDULED_SEND:
+                    p = CancelScheduledSendPayload(**cmd.payload)
+                    result = await self.mail.cancel_scheduled_send(message_id=p.message_id)
+                case CommandType.ARCHIVE_EMAIL:
+                    p = ArchiveEmailPayload(**cmd.payload)
+                    result = await self.mail.archive_email(message_id=p.message_id)
+                # --- Outlook Calendar ---
+                case CommandType.LIST_EVENTS:
+                    p = ListEventsPayload(**cmd.payload)
+                    result = await self.calendar.list_events(start=p.start, end=p.end, top=p.top)
+                case CommandType.CREATE_EVENT:
+                    p = CreateEventPayload(**cmd.payload)
+                    result = await self.calendar.create_event(
+                        subject=p.subject, start=p.start, end=p.end, location=p.location,
+                        body=p.body, attendees=p.attendees, is_all_day=p.is_all_day, timezone_name=p.timezone_name,
+                    )
+                case CommandType.UPDATE_EVENT:
+                    p = UpdateEventPayload(**cmd.payload)
+                    result = await self.calendar.update_event(
+                        event_id=p.event_id, subject=p.subject, start=p.start, end=p.end,
+                        location=p.location, body=p.body, attendees=p.attendees, timezone_name=p.timezone_name,
+                    )
+                case CommandType.CANCEL_EVENT:
+                    p = CancelEventPayload(**cmd.payload)
+                    result = await self.calendar.cancel_event(event_id=p.event_id, comment=p.comment)
+                case CommandType.FIND_AVAILABLE_SLOTS:
+                    p = FindAvailableSlotsPayload(**cmd.payload)
+                    result = await self.calendar.find_available_slots(start=p.start, end=p.end, duration_minutes=p.duration_minutes)
                 case CommandType.PING:
                     result = {"pong": True, "agent": self.agent_name}
                 case _:
@@ -164,6 +257,15 @@ async def run(web_port: int = 8001):
     if not agent.reminders.authorize():
         logger.error("Cannot access Reminders — check System Settings > Privacy > Reminders")
         return
+
+    # Outlook auth — try saved tokens first, prompt login if needed
+    if agent.outlook_auth.client_id:
+        if not await agent.outlook_auth.authorize():
+            logger.warning("Outlook not authenticated — email/calendar commands unavailable")
+        else:
+            await agent.outlook_auth.start_background_refresh()
+    else:
+        logger.info("MS_CLIENT_ID not set — Outlook integration disabled")
 
     runner = await run_web_ui(agent.reminders, web_port)
 

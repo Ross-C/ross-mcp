@@ -15,6 +15,7 @@ env/
 .env
 .env.*
 !.env.example
+.outlook_tokens.json
 
 # IDE
 .vscode/

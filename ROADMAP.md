@@ -11,16 +11,7 @@
 - [x] Web dashboards (relay + agent)
 - [ ] Schedule reminders with due dates/times via MCP
 
-## Phase 2: iCloud Calendar
-
-- [ ] List calendars
-- [ ] Create calendar events (title, date/time, duration, location)
-- [ ] List upcoming events
-- [ ] Update/cancel events
-- [ ] Conflict detection (warn if overlapping events)
-- [ ] EventKit integration on local agent
-
-## Phase 3: Office 365 Integration
+## Phase 2: Office 365 Integration
 
 - [ ] OAuth2 authentication with Microsoft Graph API
 - [ ] Email: list/search emails
@@ -29,6 +20,15 @@
 - [ ] Calendar: list events
 - [ ] Calendar: create/update events
 - [ ] Calendar: find available slots
+
+## Phase 3: iCloud Calendar
+
+- [ ] List calendars
+- [ ] Create calendar events (title, date/time, duration, location)
+- [ ] List upcoming events
+- [ ] Update/cancel events
+- [ ] Conflict detection (warn if overlapping events)
+- [ ] EventKit integration on local agent
 
 ## Phase 4: Gmail Integration
 
