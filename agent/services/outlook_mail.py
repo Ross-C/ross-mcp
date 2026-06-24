@@ -199,7 +199,13 @@ class OutlookMailService:
             filename = path.name
 
         content_bytes = base64.b64encode(path.read_bytes()).decode("utf-8")
-        content_type = mimetypes.guess_type(str(path))[0] or "application/octet-stream"
+        # Force octet-stream for uncommon types that email clients can't preview
+        guessed = mimetypes.guess_type(str(path))[0]
+        safe_types = {"application/pdf", "image/png", "image/jpeg", "image/gif",
+                      "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                      "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                      "text/plain", "text/csv"}
+        content_type = guessed if guessed in safe_types else "application/octet-stream"
 
         headers = await self.auth.get_headers()
         headers["Content-Type"] = "application/json"
