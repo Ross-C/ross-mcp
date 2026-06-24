@@ -303,6 +303,19 @@ async def find_available_slots(req: FindSlotsRequest, _=Depends(_get_api_key)):
     return await _run("find_available_slots", {"start": req.start, "end": req.end, "duration_minutes": req.duration_minutes})
 
 
+class AddAttachmentRequest(BaseModel):
+    message_id: str = Field(description="Draft message ID")
+    file_path: str = Field(description="Absolute path to file on the agent's Mac")
+    filename: str | None = Field(default=None, description="Display name for the attachment")
+
+
+@router.post("/add-attachment", summary="Add a file attachment to an email draft")
+async def add_attachment(req: AddAttachmentRequest, _=Depends(_get_api_key)):
+    payload: dict = {"message_id": req.message_id, "file_path": req.file_path}
+    if req.filename: payload["filename"] = req.filename
+    return await _run("add_attachment", payload)
+
+
 # =====================
 # Voice Memos
 # =====================

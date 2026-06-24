@@ -23,6 +23,7 @@ class CommandType(str, Enum):
     SCHEDULE_SEND = "schedule_send"
     CANCEL_SCHEDULED_SEND = "cancel_scheduled_send"
     ARCHIVE_EMAIL = "archive_email"
+    ADD_ATTACHMENT = "add_attachment"
     # Outlook Calendar
     LIST_EVENTS = "list_events"
     CREATE_EVENT = "create_event"
@@ -132,6 +133,12 @@ class CancelScheduledSendPayload(BaseModel):
 
 class ArchiveEmailPayload(BaseModel):
     message_id: str
+
+
+class AddAttachmentPayload(BaseModel):
+    message_id: str
+    file_path: str
+    filename: str | None = None
 
 
 # --- Outlook Calendar Payloads ---

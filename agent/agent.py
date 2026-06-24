@@ -36,6 +36,7 @@ from shared.messages import (
     ScheduleSendPayload,
     CancelScheduledSendPayload,
     ArchiveEmailPayload,
+    AddAttachmentPayload,
     ListEventsPayload,
     CreateEventPayload,
     UpdateEventPayload,
@@ -106,6 +107,7 @@ class Agent:
                             CommandType.SCHEDULE_SEND,
                             CommandType.CANCEL_SCHEDULED_SEND,
                             CommandType.ARCHIVE_EMAIL,
+                            CommandType.ADD_ATTACHMENT,
                             CommandType.LIST_EVENTS,
                             CommandType.CREATE_EVENT,
                             CommandType.UPDATE_EVENT,
@@ -193,6 +195,9 @@ class Agent:
                 case CommandType.ARCHIVE_EMAIL:
                     p = ArchiveEmailPayload(**cmd.payload)
                     result = await self.mail.archive_email(message_id=p.message_id)
+                case CommandType.ADD_ATTACHMENT:
+                    p = AddAttachmentPayload(**cmd.payload)
+                    result = await self.mail.add_attachment(message_id=p.message_id, file_path=p.file_path, filename=p.filename)
                 # --- Outlook Calendar ---
                 case CommandType.LIST_EVENTS:
                     p = ListEventsPayload(**cmd.payload)

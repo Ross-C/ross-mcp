@@ -465,6 +465,26 @@ async def find_available_slots(
     return json.dumps(result, indent=2)
 
 
+@mcp.tool()
+async def add_email_attachment(
+    message_id: str,
+    file_path: str,
+    filename: str | None = None,
+) -> str:
+    """Add a file attachment to an Outlook email draft.
+
+    Args:
+        message_id: The draft message ID
+        file_path: Absolute path to the file on disk
+        filename: Optional display name (defaults to the file's name)
+    """
+    payload: dict = {"message_id": message_id, "file_path": file_path}
+    if filename:
+        payload["filename"] = filename
+    result = await _send("add_attachment", payload)
+    return json.dumps(result, indent=2)
+
+
 # --- Voice Memo Tools ---
 
 

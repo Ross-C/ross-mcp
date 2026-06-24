@@ -1,9 +1,12 @@
 """Outlook email service via Microsoft Graph API."""
 
 import asyncio
+import base64
 import json
 import logging
+import mimetypes
 from datetime import datetime, timezone
+from pathlib import Path
 
 import httpx
 
@@ -161,17 +164,8 @@ class OutlookMailService:
         }
 
     async def send_draft(self, message_id: str) -> dict:
-        """Send an existing draft."""
-        headers = await self.auth.get_headers()
-
-        async with httpx.AsyncClient(timeout=30) as client:
-            resp = await client.post(
-                f"{GRAPH_URL}/me/messages/{message_id}/send",
-                headers=headers,
-            )
-            resp.raise_for_status()
-
-        return {"id": message_id, "status": "sent"}
+        """BLOCKED — sending is disabled. Emails must be sent manually from Outlook."""
+        return {"error": "Sending is disabled. Please send the draft manually from Outlook."}
 
     async def send_email(
         self,
@@ -181,76 +175,61 @@ class OutlookMailService:
         cc: list[str] | None = None,
         body_type: str = "HTML",
     ) -> dict:
-        """Create and send an email in one step."""
+        """BLOCKED — sending is disabled. Use create_draft instead."""
+        return {"error": "Sending is disabled. Use create_draft to create a draft, then send manually from Outlook."}
+
+    async def add_attachment(
+        self,
+        message_id: str,
+        file_path: str,
+        filename: str | None = None,
+    ) -> dict:
+        """Add a file attachment to a draft email.
+
+        Args:
+            message_id: The draft message ID
+            file_path: Absolute path to the file on disk
+            filename: Optional display name (defaults to the file's name)
+        """
+        path = Path(file_path)
+        if not path.exists():
+            return {"error": f"File not found: {file_path}"}
+
+        if not filename:
+            filename = path.name
+
+        content_bytes = base64.b64encode(path.read_bytes()).decode("utf-8")
+        content_type = mimetypes.guess_type(str(path))[0] or "application/octet-stream"
+
         headers = await self.auth.get_headers()
         headers["Content-Type"] = "application/json"
 
-        message = {
-            "subject": subject,
-            "body": {"contentType": body_type, "content": body},
-            "toRecipients": [{"emailAddress": {"address": addr}} for addr in to],
+        attachment_data = {
+            "@odata.type": "#microsoft.graph.fileAttachment",
+            "name": filename,
+            "contentType": content_type,
+            "contentBytes": content_bytes,
         }
-        if cc:
-            message["ccRecipients"] = [{"emailAddress": {"address": addr}} for addr in cc]
 
         async with httpx.AsyncClient(timeout=30) as client:
             resp = await client.post(
-                f"{GRAPH_URL}/me/sendMail",
+                f"{GRAPH_URL}/me/messages/{message_id}/attachments",
                 headers=headers,
-                json={"message": message},
+                json=attachment_data,
             )
             resp.raise_for_status()
-
-        return {"status": "sent", "subject": subject}
-
-    async def schedule_send(
-        self,
-        subject: str,
-        body: str,
-        to: list[str],
-        send_at: datetime,
-        cc: list[str] | None = None,
-        body_type: str = "HTML",
-    ) -> dict:
-        """Schedule an email to be sent at a future time.
-
-        Creates a draft and schedules a background task to send it.
-        """
-        draft = await self.create_draft(subject, body, to, cc, body_type)
-        message_id = draft["id"]
-
-        # Calculate delay
-        now = datetime.now(timezone.utc)
-        send_at_utc = send_at if send_at.tzinfo else send_at.replace(tzinfo=timezone.utc)
-        delay = (send_at_utc - now).total_seconds()
-
-        if delay <= 0:
-            # Send immediately if time has passed
-            return await self.send_draft(message_id)
-
-        # Schedule the send
-        task = asyncio.create_task(self._delayed_send(message_id, delay))
-        self._scheduled_sends[message_id] = task
+            data = resp.json()
 
         return {
-            "id": message_id,
-            "status": "scheduled",
-            "send_at": send_at_utc.isoformat(),
-            "subject": subject,
+            "id": data.get("id", ""),
+            "name": filename,
+            "size_bytes": path.stat().st_size,
+            "status": "attached",
         }
 
-    async def _delayed_send(self, message_id: str, delay: float):
-        """Wait and then send a draft."""
-        try:
-            await asyncio.sleep(delay)
-            await self.send_draft(message_id)
-            logger.info(f"Scheduled email sent: {message_id}")
-        except asyncio.CancelledError:
-            logger.info(f"Scheduled send cancelled: {message_id}")
-        except Exception as e:
-            logger.error(f"Failed to send scheduled email {message_id}: {e}")
-        finally:
-            self._scheduled_sends.pop(message_id, None)
+    async def schedule_send(self, **kwargs) -> dict:
+        """BLOCKED — sending is disabled. Use create_draft instead."""
+        return {"error": "Sending is disabled. Use create_draft to create a draft, then send manually from Outlook."}
 
     async def cancel_scheduled_send(self, message_id: str) -> dict:
         """Cancel a scheduled email send. Draft is kept."""
