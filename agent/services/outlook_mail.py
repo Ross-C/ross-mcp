@@ -46,7 +46,6 @@ class OutlookMailService:
             "$search": f'"{query}"',
             "$top": str(top),
             "$select": "id,subject,from,toRecipients,receivedDateTime,bodyPreview,isRead,hasAttachments",
-            "$orderby": "receivedDateTime desc",
         }
 
         async with httpx.AsyncClient(timeout=30) as client:
