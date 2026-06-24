@@ -81,9 +81,14 @@ class DocumentService:
         if not output_path:
             output_path = str(src.with_suffix(".docx"))
 
+        reference = Path(__file__).parent / "reference.docx"
+        cmd = ["pandoc", str(src), "-o", output_path]
+        if reference.exists():
+            cmd.extend(["--reference-doc", str(reference)])
+
         try:
             subprocess.run(
-                ["pandoc", str(src), "-o", output_path],
+                cmd,
                 capture_output=True, text=True, timeout=30, check=True,
             )
         except FileNotFoundError:
