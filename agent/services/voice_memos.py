@@ -11,7 +11,7 @@ import httpx
 logger = logging.getLogger("agent.voice_memos")
 
 ICLOUD_DRIVE = Path.home() / "Library/Mobile Documents/com~apple~CloudDocs"
-RECORDINGS_DIR = ICLOUD_DRIVE / "Meeting Recordings"
+RECORDINGS_DIR = ICLOUD_DRIVE / "Meetings"
 DEFAULT_TZ = ZoneInfo("Europe/London")
 
 DEEPGRAM_URL = "https://api.deepgram.com/v1/listen"
