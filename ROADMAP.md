@@ -21,6 +21,13 @@
 - [ ] Calendar: create/update events
 - [ ] Calendar: find available slots
 
+## Phase 2b: Voice Memo Transcription
+
+- [ ] Find voice memos by date/time (files have random names, match by creation timestamp)
+- [ ] Transcribe audio via Deepgram API (agent-side, key in local .env)
+- [ ] Create Apple Note with meeting title, date/time, and transcript
+- [ ] Flow: Claude asks when the meeting was → finds the recording → transcribes → creates note
+
 ## Phase 3: iCloud Calendar
 
 - [ ] List calendars
