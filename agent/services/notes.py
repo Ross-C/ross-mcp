@@ -138,18 +138,22 @@ class NotesService:
         title: str,
         body: str,
         folder: str | None = None,
+        body_is_html: bool = False,
     ) -> dict:
         """Create a new Apple Note.
 
         Args:
             title: The note title
-            body: The note body (plain text, newlines preserved)
+            body: The note body (plain text or HTML if body_is_html=True)
             folder: Optional folder name (defaults to Notes)
+            body_is_html: If True, body is treated as raw HTML
         """
-        # Build HTML body with title as heading
-        body_html = f"<h1>{html.escape(title)}</h1>"
-        for para in body.split("\n\n"):
-            body_html += f"<p>{html.escape(para)}</p>"
+        if body_is_html:
+            body_html = f"<h1>{html.escape(title)}</h1>{body}"
+        else:
+            body_html = f"<h1>{html.escape(title)}</h1>"
+            for para in body.split("\n\n"):
+                body_html += f"<p>{html.escape(para)}</p>"
 
         body_escaped = body_html.replace('"', '\\"')
 

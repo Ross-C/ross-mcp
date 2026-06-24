@@ -218,7 +218,7 @@ class Agent:
                     result = self.notes.get_note(note_id=p.note_id)
                 case CommandType.CREATE_NOTE:
                     p = CreateNotePayload(**cmd.payload)
-                    result = self.notes.create_note(title=p.title, body=p.body, folder=p.folder)
+                    result = self.notes.create_note(title=p.title, body=p.body, folder=p.folder, body_is_html=p.body_is_html)
                 case CommandType.LIST_NOTE_FOLDERS:
                     result = self.notes.list_folders()
                 case CommandType.PING:

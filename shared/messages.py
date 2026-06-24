@@ -188,6 +188,7 @@ class CreateNotePayload(BaseModel):
     title: str
     body: str
     folder: str | None = None
+    body_is_html: bool = False
 
 
 class ListNoteFoldersPayload(BaseModel):

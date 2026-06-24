@@ -504,15 +504,17 @@ async def create_note(
     title: str,
     body: str,
     folder: str | None = None,
+    body_is_html: bool = False,
 ) -> str:
     """Create a new Apple Note.
 
     Args:
         title: The note title
-        body: The note body (plain text)
+        body: The note body (plain text, or HTML if body_is_html is True)
         folder: Optional folder name (defaults to Notes)
+        body_is_html: If True, body is treated as raw HTML for rich formatting
     """
-    payload: dict = {"title": title, "body": body}
+    payload: dict = {"title": title, "body": body, "body_is_html": body_is_html}
     if folder:
         payload["folder"] = folder
     result = await _send("create_note", payload)
