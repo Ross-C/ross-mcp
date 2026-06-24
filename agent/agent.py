@@ -1,12 +1,14 @@
 """Local Mac agent — connects to relay via WebSocket, executes commands."""
 
 import asyncio
+import atexit
 import json
 import logging
 import os
 import platform
 import signal
 import sys
+import tempfile
 
 import websockets
 from aiohttp import web
@@ -171,7 +173,39 @@ async def run(web_port: int = 8001):
         await runner.cleanup()
 
 
+LOCK_FILE = os.path.join(tempfile.gettempdir(), "ross-mcp-agent.lock")
+
+
+def acquire_lock():
+    """Ensure only one agent runs at a time using a PID lock file."""
+    if os.path.exists(LOCK_FILE):
+        try:
+            with open(LOCK_FILE) as f:
+                old_pid = int(f.read().strip())
+            # Check if process is still running
+            os.kill(old_pid, 0)
+            logger.error(f"Agent already running (PID {old_pid}). Exiting.")
+            sys.exit(1)
+        except (ProcessLookupError, ValueError):
+            # Process is dead, stale lock file
+            pass
+
+    with open(LOCK_FILE, "w") as f:
+        f.write(str(os.getpid()))
+    atexit.register(release_lock)
+
+
+def release_lock():
+    """Remove the lock file on exit."""
+    try:
+        os.remove(LOCK_FILE)
+    except FileNotFoundError:
+        pass
+
+
 def main():
+    acquire_lock()
+
     signal.signal(signal.SIGINT, lambda *_: sys.exit(0))
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
 
