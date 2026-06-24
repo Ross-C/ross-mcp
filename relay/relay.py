@@ -315,8 +315,11 @@ DASHBOARD_HTML = """
 # --- Mount remote MCP endpoint ---
 
 from relay.mcp_endpoint import create_mcp_app, set_execute_command
+from relay.openai_endpoints import router as openai_router, init as openai_init
 
 set_execute_command(execute_command)
+openai_init(execute_command, verify_api_key)
+app.include_router(openai_router)
 app.mount("/mcp", create_mcp_app())
 
 
