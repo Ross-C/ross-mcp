@@ -2,6 +2,7 @@
 
 import logging
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 import httpx
 
@@ -10,6 +11,7 @@ from agent.services.outlook_auth import OutlookAuth
 logger = logging.getLogger("agent.outlook_calendar")
 
 GRAPH_URL = "https://graph.microsoft.com/v1.0"
+DEFAULT_TZ = "Europe/London"
 
 
 class OutlookCalendarService:
@@ -29,9 +31,10 @@ class OutlookCalendarService:
         Defaults to the next 7 days if no range given.
         """
         headers = await self.auth.get_headers()
+        headers["Prefer"] = f'outlook.timezone="{DEFAULT_TZ}"'
 
         if not start:
-            start = datetime.now(timezone.utc)
+            start = datetime.now(ZoneInfo(DEFAULT_TZ))
         if not end:
             end = start + timedelta(days=7)
 
