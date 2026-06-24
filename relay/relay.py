@@ -314,8 +314,9 @@ DASHBOARD_HTML = """
 
 # --- Mount remote MCP endpoint ---
 
-from relay.mcp_endpoint import create_mcp_app
+from relay.mcp_endpoint import create_mcp_app, set_execute_command
 
+set_execute_command(execute_command)
 app.mount("/mcp", create_mcp_app())
 
 

@@ -67,14 +67,22 @@ mcp = FastMCP(
 )
 
 
+_execute_command = None
+
+
+def set_execute_command(fn):
+    """Called by relay.py to inject its execute_command function."""
+    global _execute_command
+    _execute_command = fn
+
+
 async def _send(command_type: str, payload: dict = {}) -> dict:
     """Execute a command via the relay's internal routing."""
-    # Import here to avoid circular imports
-    from relay.relay import execute_command
+    if _execute_command is None:
+        raise RuntimeError("execute_command not registered — call set_execute_command first")
     from shared.messages import CommandType
-
     cmd_type = CommandType(command_type)
-    return await execute_command(cmd_type, payload)
+    return await _execute_command(cmd_type, payload)
 
 
 # --- Reminder Tools ---
