@@ -485,6 +485,39 @@ async def add_email_attachment(
     return json.dumps(result, indent=2)
 
 
+# --- Document Tools ---
+
+
+@mcp.tool()
+async def convert_md_to_pdf(md_path: str, output_path: str | None = None) -> str:
+    """Convert a Markdown file to PDF.
+
+    Args:
+        md_path: Absolute path to the .md file
+        output_path: Optional output path (defaults to same name with .pdf)
+    """
+    payload: dict = {"md_path": md_path}
+    if output_path:
+        payload["output_path"] = output_path
+    result = await _send("convert_md_to_pdf", payload)
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def convert_md_to_docx(md_path: str, output_path: str | None = None) -> str:
+    """Convert a Markdown file to DOCX (Word).
+
+    Args:
+        md_path: Absolute path to the .md file
+        output_path: Optional output path (defaults to same name with .docx)
+    """
+    payload: dict = {"md_path": md_path}
+    if output_path:
+        payload["output_path"] = output_path
+    result = await _send("convert_md_to_docx", payload)
+    return json.dumps(result, indent=2)
+
+
 # --- Voice Memo Tools ---
 
 

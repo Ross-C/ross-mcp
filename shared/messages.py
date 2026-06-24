@@ -30,6 +30,9 @@ class CommandType(str, Enum):
     UPDATE_EVENT = "update_event"
     CANCEL_EVENT = "cancel_event"
     FIND_AVAILABLE_SLOTS = "find_available_slots"
+    # Documents
+    CONVERT_MD_TO_PDF = "convert_md_to_pdf"
+    CONVERT_MD_TO_DOCX = "convert_md_to_docx"
     # Voice Memos
     LIST_RECORDINGS = "list_recordings"
     TRANSCRIBE_RECORDING = "transcribe_recording"
@@ -183,6 +186,11 @@ class FindAvailableSlotsPayload(BaseModel):
 
 
 # --- Apple Notes Payloads ---
+
+class ConvertDocumentPayload(BaseModel):
+    md_path: str
+    output_path: str | None = None
+
 
 class ListRecordingsPayload(BaseModel):
     date: str | None = None

@@ -42,6 +42,7 @@ from shared.messages import (
     UpdateEventPayload,
     CancelEventPayload,
     FindAvailableSlotsPayload,
+    ConvertDocumentPayload,
     ListRecordingsPayload,
     TranscribeRecordingPayload,
     SearchNotesPayload,
@@ -55,6 +56,7 @@ from agent.services.outlook_mail import OutlookMailService
 from agent.services.outlook_calendar import OutlookCalendarService
 from agent.services.notes import NotesService
 from agent.services.voice_memos import VoiceMemosService
+from agent.services.documents import DocumentService
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(levelname)s: %(message)s")
@@ -72,6 +74,7 @@ class Agent:
         self.calendar = OutlookCalendarService(self.outlook_auth)
         self.notes = NotesService()
         self.voice_memos = VoiceMemosService()
+        self.documents = DocumentService()
         self._running = True
 
     async def connect(self):
@@ -87,6 +90,8 @@ class Agent:
                         CommandType.CREATE_REMINDER,
                         CommandType.LIST_REMINDERS,
                         CommandType.COMPLETE_REMINDER,
+                        CommandType.CONVERT_MD_TO_PDF,
+                        CommandType.CONVERT_MD_TO_DOCX,
                         CommandType.LIST_RECORDINGS,
                         CommandType.TRANSCRIBE_RECORDING,
                         CommandType.SEARCH_NOTES,
@@ -220,6 +225,13 @@ class Agent:
                 case CommandType.FIND_AVAILABLE_SLOTS:
                     p = FindAvailableSlotsPayload(**cmd.payload)
                     result = await self.calendar.find_available_slots(start=p.start, end=p.end, duration_minutes=p.duration_minutes)
+                # --- Documents ---
+                case CommandType.CONVERT_MD_TO_PDF:
+                    p = ConvertDocumentPayload(**cmd.payload)
+                    result = self.documents.convert_md_to_pdf(md_path=p.md_path, output_path=p.output_path)
+                case CommandType.CONVERT_MD_TO_DOCX:
+                    p = ConvertDocumentPayload(**cmd.payload)
+                    result = self.documents.convert_md_to_docx(md_path=p.md_path, output_path=p.output_path)
                 # --- Voice Memos ---
                 case CommandType.LIST_RECORDINGS:
                     p = ListRecordingsPayload(**cmd.payload)
