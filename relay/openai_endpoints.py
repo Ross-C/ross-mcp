@@ -304,6 +304,35 @@ async def find_available_slots(req: FindSlotsRequest, _=Depends(_get_api_key)):
 
 
 # =====================
+# Voice Memos
+# =====================
+
+class ListRecordingsRequest(BaseModel):
+    date: str | None = Field(default=None, description="Date filter in YYYY-MM-DD format")
+    top: int = Field(default=10, description="Max results")
+
+
+@router.post("/list-recordings", summary="List voice memo recordings")
+async def list_recordings(req: ListRecordingsRequest, _=Depends(_get_api_key)):
+    payload: dict = {"top": req.top}
+    if req.date: payload["date"] = req.date
+    return await _run("list_recordings", payload)
+
+
+class TranscribeRequest(BaseModel):
+    filename: str | None = Field(default=None, description="Exact filename in Meeting Recordings folder")
+    date: str | None = Field(default=None, description="Date to find most recent recording (YYYY-MM-DD)")
+
+
+@router.post("/transcribe-recording", summary="Transcribe a voice memo with speaker diarization")
+async def transcribe_recording(req: TranscribeRequest, _=Depends(_get_api_key)):
+    payload: dict = {}
+    if req.filename: payload["filename"] = req.filename
+    if req.date: payload["date"] = req.date
+    return await _run("transcribe_recording", payload)
+
+
+# =====================
 # Apple Notes
 # =====================
 

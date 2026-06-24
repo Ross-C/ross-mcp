@@ -29,6 +29,9 @@ class CommandType(str, Enum):
     UPDATE_EVENT = "update_event"
     CANCEL_EVENT = "cancel_event"
     FIND_AVAILABLE_SLOTS = "find_available_slots"
+    # Voice Memos
+    LIST_RECORDINGS = "list_recordings"
+    TRANSCRIBE_RECORDING = "transcribe_recording"
     # Apple Notes
     SEARCH_NOTES = "search_notes"
     GET_NOTE = "get_note"
@@ -173,6 +176,16 @@ class FindAvailableSlotsPayload(BaseModel):
 
 
 # --- Apple Notes Payloads ---
+
+class ListRecordingsPayload(BaseModel):
+    date: str | None = None
+    top: int = 10
+
+
+class TranscribeRecordingPayload(BaseModel):
+    filename: str | None = None
+    date: str | None = None
+
 
 class SearchNotesPayload(BaseModel):
     query: str

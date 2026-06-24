@@ -414,6 +414,50 @@ async def find_available_slots(
     return json.dumps(result, indent=2)
 
 
+# --- Voice Memo Tools ---
+
+
+@mcp.tool()
+async def list_recordings(
+    date: str | None = None,
+    top: int = 10,
+) -> str:
+    """List voice memo recordings in the Meeting Recordings folder.
+
+    Args:
+        date: Optional date filter in YYYY-MM-DD format
+        top: Max results (default 10)
+    """
+    payload: dict = {"top": top}
+    if date:
+        payload["date"] = date
+    result = await _send_command("list_recordings", payload)
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def transcribe_recording(
+    filename: str | None = None,
+    date: str | None = None,
+) -> str:
+    """Transcribe a voice memo using Deepgram with speaker diarization.
+
+    Finds the recording by filename or date (most recent on that date).
+    Returns the transcript with speaker labels.
+
+    Args:
+        filename: Exact filename in Meeting Recordings folder (optional)
+        date: Date to find the most recent recording, YYYY-MM-DD (optional)
+    """
+    payload: dict = {}
+    if filename:
+        payload["filename"] = filename
+    if date:
+        payload["date"] = date
+    result = await _send_command("transcribe_recording", payload)
+    return json.dumps(result, indent=2)
+
+
 # --- Apple Notes Tools ---
 
 

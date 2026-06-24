@@ -41,6 +41,8 @@ from shared.messages import (
     UpdateEventPayload,
     CancelEventPayload,
     FindAvailableSlotsPayload,
+    ListRecordingsPayload,
+    TranscribeRecordingPayload,
     SearchNotesPayload,
     GetNotePayload,
     CreateNotePayload,
@@ -51,6 +53,7 @@ from agent.services.outlook_auth import OutlookAuth
 from agent.services.outlook_mail import OutlookMailService
 from agent.services.outlook_calendar import OutlookCalendarService
 from agent.services.notes import NotesService
+from agent.services.voice_memos import VoiceMemosService
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(levelname)s: %(message)s")
@@ -67,6 +70,7 @@ class Agent:
         self.mail = OutlookMailService(self.outlook_auth)
         self.calendar = OutlookCalendarService(self.outlook_auth)
         self.notes = NotesService()
+        self.voice_memos = VoiceMemosService()
         self._running = True
 
     async def connect(self):
@@ -82,6 +86,8 @@ class Agent:
                         CommandType.CREATE_REMINDER,
                         CommandType.LIST_REMINDERS,
                         CommandType.COMPLETE_REMINDER,
+                        CommandType.LIST_RECORDINGS,
+                        CommandType.TRANSCRIBE_RECORDING,
                         CommandType.SEARCH_NOTES,
                         CommandType.GET_NOTE,
                         CommandType.CREATE_NOTE,
@@ -209,6 +215,13 @@ class Agent:
                 case CommandType.FIND_AVAILABLE_SLOTS:
                     p = FindAvailableSlotsPayload(**cmd.payload)
                     result = await self.calendar.find_available_slots(start=p.start, end=p.end, duration_minutes=p.duration_minutes)
+                # --- Voice Memos ---
+                case CommandType.LIST_RECORDINGS:
+                    p = ListRecordingsPayload(**cmd.payload)
+                    result = self.voice_memos.list_recordings(date=p.date, top=p.top)
+                case CommandType.TRANSCRIBE_RECORDING:
+                    p = TranscribeRecordingPayload(**cmd.payload)
+                    result = await self.voice_memos.transcribe(filename=p.filename, date=p.date)
                 # --- Apple Notes ---
                 case CommandType.SEARCH_NOTES:
                     p = SearchNotesPayload(**cmd.payload)

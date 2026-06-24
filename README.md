@@ -12,8 +12,9 @@ Personal life admin system — manage Apple Reminders, Outlook email/calendar, a
 | **Outlook Email** | Search, read, draft, send, schedule, archive emails |
 | **Outlook Calendar** | List events, create/update/cancel events, find free slots |
 | **Apple Notes** | Search, read, create notes, list folders |
+| **Voice Memos** | List recordings, transcribe with speaker diarization (Deepgram) |
 
-**22 tools** accessible from:
+**24 tools** accessible from:
 - **Claude** (web/desktop/CLI) via MCP protocol
 - **ChatGPT** via Custom GPT Actions (OpenAPI)
 - **Any HTTP client** via REST API
@@ -184,6 +185,24 @@ python -m agent.agent
 
 Both agents connect to the same relay — commands route to whichever is online.
 
+## Voice Memo Transcription
+
+Record meetings on iPad using Voice Memos, share to iCloud Drive, then transcribe via Claude or ChatGPT.
+
+### Setup
+
+1. Create a "Meeting Recordings" folder in iCloud Drive (done automatically by the agent)
+2. Create an iOS Shortcut called "Save Meeting Recording" on your iPad:
+   - Action: **Save File** → iCloud Drive / Meeting Recordings (Ask Where to Save: off)
+   - Enable **Show in Share Sheet**, set receives to **Audio**
+3. Add your `DEEPGRAM_API_KEY` to `.env`
+
+### After a meeting
+
+1. Open Voice Memos on iPad → tap **...** → **Share** → **Save Meeting Recording**
+2. Tell Claude: *"Transcribe my meeting with [name] from this morning"*
+3. Claude finds the recording, transcribes with speaker diarization, enriches with summary and action points, and saves as an Apple Note
+
 ## Remote Endpoints
 
 | Endpoint | URL | Auth |
@@ -204,7 +223,7 @@ Both agents connect to the same relay — commands route to whichever is online.
 | `RELAY_API_KEY` | Fly.io secrets | Set via `fly secrets set` |
 | `MS_CLIENT_ID` / `MS_CLIENT_SECRET` | `.env` (local) | Azure AD app credentials |
 | `.outlook_tokens.json` | Project root (gitignored) | OAuth tokens, auto-refreshed |
-| `DEEPGRAM_API_KEY` | `.env` (local) | For voice memo transcription (future) |
+| `DEEPGRAM_API_KEY` | `.env` (local) | For voice memo transcription |
 
 **Regenerate API key:**
 
@@ -227,7 +246,8 @@ ross-mcp/
 │       ├── notes.py               # Apple Notes via AppleScript
 │       ├── outlook_auth.py        # OAuth2 for Microsoft Graph
 │       ├── outlook_mail.py        # Outlook email operations
-│       └── outlook_calendar.py    # Outlook calendar operations
+│       ├── outlook_calendar.py    # Outlook calendar operations
+│       └── voice_memos.py         # Voice memo transcription (Deepgram)
 ├── relay/                         # Cloud relay (Fly.io)
 │   ├── relay.py                   # FastAPI hub (WebSocket + HTTP + dashboard)
 │   ├── mcp_endpoint.py            # Remote MCP server (streamable-http)
@@ -235,7 +255,7 @@ ross-mcp/
 │   ├── Dockerfile
 │   └── requirements.txt
 ├── shared/
-│   └── messages.py                # Command/Response schemas (23 command types)
+│   └── messages.py                # Command/Response schemas (25 command types)
 ├── mcp_server.py                  # Local MCP server (stdio, for Claude Code)
 ├── fly.toml                       # Fly.io config
 ├── .env.example                   # Environment template
