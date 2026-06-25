@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Request, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-router = APIRouter()
+router = APIRouter(include_in_schema=False)
 
 DASHBOARD_PASSWORD = os.getenv("DASHBOARD_PASSWORD", "")
 DB_PATH = os.getenv("DB_PATH", "/data/mcp_stats.db")

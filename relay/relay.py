@@ -266,7 +266,7 @@ async def execute_command(command_type: CommandType, payload: dict) -> dict:
         agent.pending_responses.pop(cmd.id, None)
 
 
-@app.post("/api/command")
+@app.post("/api/command", include_in_schema=False)
 async def send_command(
     request: CommandRequest,
     _: str = Depends(verify_api_key),
@@ -276,7 +276,7 @@ async def send_command(
 
 # --- Status & Dashboard ---
 
-@app.get("/api/status")
+@app.get("/api/status", include_in_schema=False)
 async def status(_: str = Depends(verify_api_key)):
     return {
         "agents": {
