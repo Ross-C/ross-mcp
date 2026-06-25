@@ -220,8 +220,13 @@ class OutlookMailService:
         }
 
     async def send_draft(self, message_id: str) -> dict:
-        """BLOCKED — sending is disabled. Emails must be sent manually from Outlook."""
-        return {"error": "Sending is disabled. Please send the draft manually from Outlook."}
+        """Send an existing draft email."""
+        headers = await self.auth.get_headers()
+        url = f"{GRAPH_URL}/me/messages/{message_id}/send"
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.post(url, headers=headers)
+            resp.raise_for_status()
+        return {"status": "sent", "message_id": message_id}
 
     async def send_email(
         self,
@@ -231,8 +236,23 @@ class OutlookMailService:
         cc: list[str] | None = None,
         body_type: str = "HTML",
     ) -> dict:
-        """BLOCKED — sending is disabled. Use create_draft instead."""
-        return {"error": "Sending is disabled. Use create_draft to create a draft, then send manually from Outlook."}
+        """Send an email immediately. Only called when recipients are pre-approved."""
+        headers = await self.auth.get_headers()
+        email_data: dict = {
+            "message": {
+                "subject": subject,
+                "body": {"contentType": body_type, "content": body},
+                "toRecipients": [{"emailAddress": {"address": addr}} for addr in to],
+            }
+        }
+        if cc:
+            email_data["message"]["ccRecipients"] = [{"emailAddress": {"address": addr}} for addr in cc]
+
+        url = f"{GRAPH_URL}/me/sendMail"
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.post(url, headers=headers, json=email_data)
+            resp.raise_for_status()
+        return {"status": "sent", "subject": subject, "to": to}
 
     async def add_attachment(
         self,

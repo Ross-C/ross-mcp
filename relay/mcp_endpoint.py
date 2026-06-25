@@ -310,7 +310,7 @@ async def send_email(
     cc: list[str] | None = None,
     body_type: str = "HTML",
 ) -> str:
-    """Compose and send an Outlook email immediately.
+    """Send an Outlook email immediately. Only works if ALL recipients are in the allowed recipients list (managed on the dashboard Contacts tab). If any recipient is not allowed, use create_email_draft instead.
 
     Args:
         subject: Email subject
@@ -319,6 +319,10 @@ async def send_email(
         cc: Optional list of CC addresses
         body_type: Content type — HTML (default) or Text
     """
+    from relay.dashboard import is_allowed_recipient
+    blocked = [addr for addr in to if not is_allowed_recipient(addr)]
+    if blocked:
+        return json.dumps({"error": f"Cannot send directly to: {', '.join(blocked)}. Use create_email_draft instead. To allow direct sending, add them as allowed recipients on the dashboard."})
     payload: dict = {"subject": subject, "body": body, "to": to, "body_type": body_type}
     if cc:
         payload["cc"] = cc

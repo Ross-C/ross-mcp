@@ -812,6 +812,22 @@ DASHBOARD_HTML = """<!DOCTYPE html>
     function changeActivityPage(dir) { activityPage = Math.max(0, activityPage + dir); renderActivity(); }
     function changeUpdatesPage(dir) { updatesPage = Math.max(0, updatesPage + dir); renderUpdates(); }
 
+    // Preserve open/closed state of all <details> across DOM rebuilds
+    function saveOpenDetails(container) {
+        const open = new Set();
+        (container || document).querySelectorAll('details[open]').forEach(d => {
+            const key = d.dataset.agent || d.dataset.id || d.querySelector('summary')?.textContent?.trim();
+            if (key) open.add(key);
+        });
+        return open;
+    }
+    function restoreOpenDetails(container, openSet) {
+        (container || document).querySelectorAll('details').forEach(d => {
+            const key = d.dataset.agent || d.dataset.id || d.querySelector('summary')?.textContent?.trim();
+            if (key && openSet.has(key)) d.open = true;
+        });
+    }
+
     const TOOL_CATEGORIES = {
         'Email': ['search_emails', 'get_email', 'get_thread', 'create_draft', 'draft_reply', 'update_draft', 'send_draft', 'send_email', 'schedule_send', 'cancel_scheduled_send', 'archive_email', 'add_attachment'],
         'Gmail': ['gmail_search', 'gmail_get_email', 'gmail_get_thread', 'gmail_create_draft', 'gmail_archive', 'gmail_list_labels'],
@@ -987,12 +1003,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         const el = document.getElementById('agents-list');
         const entries = Object.entries(dashData.agents);
         const byAgent = dashData.stats.by_agent || {};
-        // Preserve open/closed state of capability details across refreshes
-        const openDetails = new Set();
-        el.querySelectorAll('details[open]').forEach(d => {
-            const name = d.dataset.agent;
-            if (name) openDetails.add(name);
-        });
+        const openDetails = saveOpenDetails(el);
         if (entries.length === 0) {
             el.innerHTML = '<div class="bg-white border border-gray-200 rounded-xl p-6 text-center text-gray-400">No agents connected</div>';
             return;
@@ -1049,6 +1060,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
                 </details>
             </div>`;
         }).join('');
+        restoreOpenDetails(el, openDetails);
     }
 
     function renderActivity() {
@@ -1089,6 +1101,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
             return;
         }
         noErrors.classList.add('hidden');
+        const openDetails = saveOpenDetails(list);
         list.innerHTML = failed.map(r => {
             const time = new Date(r.timestamp).toLocaleString();
             const isReprocessed = r.status === 'reprocessed';
@@ -1113,13 +1126,14 @@ DASHBOARD_HTML = """<!DOCTYPE html>
                     </div>
                 </div>
                 <div class="text-red-600 text-sm mb-2">${r.error}</div>
-                <details>
+                <details data-id="failed-${r.id}">
                     <summary class="text-xs text-gray-400 cursor-pointer hover:text-gray-600">Show payload</summary>
                     <pre class="mt-2 bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs font-mono text-gray-700 overflow-x-auto max-h-48 overflow-y-auto">${payloadStr.replace(/</g,'&lt;')}</pre>
                 </details>
                 ${isReprocessed ? '<div class="text-xs text-emerald-500 mt-2">Reprocessed at ' + new Date(r.reprocessed_at).toLocaleString() + '</div>' : ''}
             </div>`;
         }).join('');
+        restoreOpenDetails(list, openDetails);
     }
 
     async function retryRequest(id) {
