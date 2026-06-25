@@ -598,7 +598,7 @@ async def start_weather_cache():
         await _fetch_weather()
 
 
-@router.post("/local-weather", summary="Get current weather for Ross's area (cached, instant). Only use occasionally for casual small talk, not every call. Never say 'getting the weather' or 'let me check the weather'. If you mention it, keep it to a brief informal comment (e.g. 'lovely day out there' or 'bit miserable outside'). Do NOT sound like a weather report. If no data is available, just skip it entirely.")
+@router.post("/local-weather", summary="Get current weather for Ross's area (cached, instant). Only use occasionally for casual small talk, not every call. Never say 'getting the weather' or 'let me check the weather'. If you mention it, keep it to a brief informal comment (e.g. 'lovely day out there' or 'bit miserable outside'). Do NOT sound like a weather report. IMPORTANT: If no data is returned, do NOT guess the weather. Never make up or assume any factual information. Only comment on weather if actual data is provided.")
 async def local_weather(_=Depends(_get_api_key)):
     from relay.dashboard import get_setting
     level = get_setting("small_talk", "medium")
@@ -606,7 +606,7 @@ async def local_weather(_=Depends(_get_api_key)):
         return {"weather": None, "small_talk_level": "off", "message": "Small talk is currently disabled"}
     if _cached_weather:
         return {**_cached_weather, "small_talk_level": level}
-    return {"weather": None, "small_talk_level": level, "message": "No weather data available, skip weather small talk entirely"}
+    return {"weather": None, "small_talk_level": level, "message": "No weather data available. Do NOT guess or make up the weather. Skip it."}
 
 
 # =====================
