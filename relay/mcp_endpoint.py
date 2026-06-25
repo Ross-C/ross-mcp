@@ -169,14 +169,14 @@ async def complete_reminder(reminder_id: str) -> str:
 
 @mcp.tool()
 async def search_emails(
-    query: str,
+    query: str = "",
     folder: str | None = None,
     top: int = 10,
 ) -> str:
-    """Search Outlook emails.
+    """Search Outlook emails. If query is empty, lists recent emails.
 
     Args:
-        query: Search query (matches subject, body, sender, etc.)
+        query: Search query (matches subject, body, sender, etc.). Leave empty to list recent emails.
         folder: Optional folder (inbox, sentitems, drafts, archive)
         top: Max results (default 10)
     """

@@ -38,7 +38,6 @@ class OutlookMailService:
             top: Max results to return.
         """
         headers = await self.auth.get_headers()
-        headers["ConsistencyLevel"] = "eventual"
 
         base = f"{GRAPH_URL}/me"
         if folder:
@@ -46,10 +45,14 @@ class OutlookMailService:
         url = f"{base}/messages"
 
         params = {
-            "$search": f'"{query}"',
             "$top": str(top),
             "$select": "id,subject,from,toRecipients,receivedDateTime,bodyPreview,isRead,hasAttachments",
         }
+        if query.strip():
+            headers["ConsistencyLevel"] = "eventual"
+            params["$search"] = f'"{query}"'
+        else:
+            params["$orderby"] = "receivedDateTime desc"
 
         async with httpx.AsyncClient(timeout=30) as client:
             resp = await client.get(url, headers=headers, params=params)

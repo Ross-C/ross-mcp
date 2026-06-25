@@ -95,7 +95,7 @@ class CompleteReminderPayload(BaseModel):
 # --- Outlook Email Payloads ---
 
 class SearchEmailsPayload(BaseModel):
-    query: str
+    query: str = ""
     folder: str | None = None
     top: int = 10
 

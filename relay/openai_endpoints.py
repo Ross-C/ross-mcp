@@ -99,7 +99,7 @@ async def complete_reminder(req: CompleteReminderRequest, _=Depends(_get_api_key
 # =====================
 
 class SearchEmailsRequest(BaseModel):
-    query: str = Field(description="Search query (matches subject, body, sender)")
+    query: str = Field(default="", description="Search query (matches subject, body, sender). Leave empty to list recent emails.")
     folder: str | None = Field(default=None, description="Folder: inbox, sentitems, drafts, archive")
     top: int = Field(default=10, description="Max results")
 
