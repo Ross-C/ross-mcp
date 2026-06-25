@@ -555,11 +555,12 @@ WMO_WEATHER = {
 }
 
 
-@router.post("/local-weather", summary="Get current weather for Ross's area (BL8, Bury). Only use occasionally for natural small talk.")
+@router.post("/local-weather", summary="Get current weather for Ross's area (BL8, Bury). Also returns the small talk level setting.")
 async def local_weather(_=Depends(_get_api_key)):
     from relay.dashboard import get_setting
-    if get_setting("small_talk", "true") != "true":
-        return {"weather": None, "message": "Small talk is currently disabled"}
+    level = get_setting("small_talk", "medium")
+    if level == "false" or level == "off":
+        return {"weather": None, "small_talk_level": "off", "message": "Small talk is currently disabled"}
     import httpx
     try:
         async with httpx.AsyncClient(timeout=10) as client:
@@ -582,6 +583,7 @@ async def local_weather(_=Depends(_get_api_key)):
                 "wind_kmh": wind,
                 "location": "Bury, Greater Manchester",
                 "summary": f"{conditions}, {temp}°C, wind {wind} km/h",
+                "small_talk_level": level,
             }
     except Exception as e:
         return {"error": str(e)}

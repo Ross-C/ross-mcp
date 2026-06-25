@@ -78,7 +78,7 @@ def _init_db():
             key TEXT PRIMARY KEY,
             value TEXT NOT NULL
         )""")
-        conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('small_talk', 'true')")
+        conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('small_talk', 'high')")
         conn.execute("""CREATE TABLE IF NOT EXISTS contacts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
@@ -385,7 +385,7 @@ async def dashboard_stats(request: Request):
 async def get_settings(request: Request):
     if not _verify_session(request):
         return Response(status_code=401)
-    return {"small_talk": get_setting("small_talk", "true") == "true"}
+    return {"small_talk": get_setting("small_talk", "medium")}
 
 
 @router.post("/api/dashboard/settings")
@@ -678,11 +678,13 @@ DASHBOARD_HTML = """<!DOCTYPE html>
             <div class="bg-white border border-gray-200 rounded-xl p-5 mb-4">
                 <h3 class="text-sm font-semibold text-gray-700 mb-3">Sophie Settings</h3>
                 <div class="flex items-center gap-3">
-                    <label class="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" id="toggle-small-talk" onchange="toggleSmallTalk()" class="sr-only peer">
-                        <div class="w-9 h-5 bg-gray-200 rounded-full peer peer-checked:bg-blue-600 after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full"></div>
-                    </label>
-                    <span class="text-sm text-gray-600">Small talk (weather, casual comments)</span>
+                    <label class="text-sm text-gray-600">Small talk</label>
+                    <select id="small-talk-level" onchange="updateSmallTalk()" class="bg-gray-50 border border-gray-200 text-gray-700 text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="off">Off</option>
+                        <option value="medium">Medium (occasional)</option>
+                        <option value="high">High (demo mode)</option>
+                    </select>
+                    <span class="text-xs text-gray-400" id="small-talk-desc"></span>
                 </div>
             </div>
             <div class="bg-white border border-gray-200 rounded-xl p-5 mb-4">
@@ -1238,21 +1240,30 @@ DASHBOARD_HTML = """<!DOCTYPE html>
     fetchContacts();
 
     // --- Settings ---
+    const SMALL_TALK_DESCS = {
+        off: 'No weather or casual comments',
+        medium: 'Occasional touches, roughly one in three calls',
+        high: 'Every call — weather, time of day, day of week',
+    };
+
     async function fetchSettings() {
         try {
             const resp = await fetch('/api/dashboard/settings');
             if (resp.status === 401) return;
             const data = await resp.json();
-            document.getElementById('toggle-small-talk').checked = data.small_talk;
+            const level = data.small_talk === true ? 'medium' : (data.small_talk || 'medium');
+            document.getElementById('small-talk-level').value = level;
+            document.getElementById('small-talk-desc').textContent = SMALL_TALK_DESCS[level] || '';
         } catch(e) {}
     }
 
-    async function toggleSmallTalk() {
-        const enabled = document.getElementById('toggle-small-talk').checked;
+    async function updateSmallTalk() {
+        const level = document.getElementById('small-talk-level').value;
+        document.getElementById('small-talk-desc').textContent = SMALL_TALK_DESCS[level] || '';
         await fetch('/api/dashboard/settings', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({small_talk: enabled}),
+            body: JSON.stringify({small_talk: level}),
         });
     }
 
