@@ -251,3 +251,4 @@ class AgentRegistration(BaseModel):
     agent_name: str
     machine_name: str
     capabilities: list[CommandType]
+    version: str | None = None

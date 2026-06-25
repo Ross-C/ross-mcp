@@ -198,6 +198,7 @@ async def dashboard_stats(request: Request):
             "capabilities": [c.value for c in a.registration.capabilities],
             "connected_at": a.connected_at.isoformat(),
             "last_seen": a.last_seen.isoformat(),
+            "version": getattr(a.registration, 'version', None),
         }
     return {"agents": agent_data, "stats": get_stats()}
 
@@ -461,6 +462,8 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         'System': ['update_agent', 'agent_status', 'ping'],
     };
 
+    const BLOCKED_TOOLS = new Set(['send_draft', 'send_email', 'schedule_send']);
+
     const CATEGORY_COLOURS = {
         'Email': '#60a5fa',
         'Calendar': '#6ee7b7',
@@ -580,6 +583,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
             const mins = Math.round((Date.now() - connectedAt.getTime()) / 60000);
             const uptime = mins < 60 ? mins + 'm' : Math.floor(mins / 60) + 'h ' + (mins % 60) + 'm';
             const cmdCount = byAgent[name] || 0;
+            const ver = info.version ? `<span class="text-gray-400 text-xs font-mono">${info.version}</span>` : '';
             return `
             <div class="bg-white border border-gray-200 rounded-xl p-5">
                 <div class="flex items-center justify-between mb-3">
@@ -587,6 +591,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
                         <div class="w-2 h-2 rounded-full bg-emerald-400"></div>
                         <span class="text-gray-900 font-semibold">${name}</span>
                         <span class="text-gray-400 text-sm font-normal">${info.machine}</span>
+                        ${ver}
                     </div>
                     <span class="text-xs text-gray-400">${cmdCount} commands handled</span>
                 </div>
@@ -594,9 +599,12 @@ DASHBOARD_HTML = """<!DOCTYPE html>
                     Connected ${connectedAt.toLocaleString()} &middot; Uptime: ${uptime} &middot; ${info.capabilities.length} tools
                 </div>
                 <div class="flex flex-wrap gap-1.5">
-                    ${info.capabilities.map(c =>
-                        '<span class="bg-gray-100 text-gray-500 text-xs px-2 py-0.5 rounded-full">' + c + '</span>'
-                    ).join('')}
+                    ${info.capabilities.map(c => {
+                        if (BLOCKED_TOOLS.has(c)) {
+                            return '<span class="bg-red-50 text-red-500 text-xs px-2 py-0.5 rounded-full border border-red-200" title="Blocked for safety">' + c + '</span>';
+                        }
+                        return '<span class="bg-gray-100 text-gray-500 text-xs px-2 py-0.5 rounded-full">' + c + '</span>';
+                    }).join('')}
                 </div>
             </div>`;
         }).join('');

@@ -7,6 +7,7 @@ import logging
 import os
 import platform
 import signal
+import subprocess
 import sys
 import tempfile
 
@@ -77,6 +78,20 @@ class Agent:
         self.voice_memos = VoiceMemosService()
         self.documents = DocumentService()
         self._running = True
+        self._version = self._get_git_version()
+
+    @staticmethod
+    def _get_git_version() -> str | None:
+        """Get the current git commit hash."""
+        try:
+            project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            result = subprocess.run(
+                ["git", "rev-parse", "--short", "HEAD"],
+                cwd=project_root, capture_output=True, text=True, timeout=5,
+            )
+            return result.stdout.strip() if result.returncode == 0 else None
+        except Exception:
+            return None
 
     async def connect(self):
         """Connect to relay and process commands."""
@@ -125,9 +140,10 @@ class Agent:
                         agent_name=self.agent_name,
                         machine_name=platform.node(),
                         capabilities=capabilities,
+                        version=self._version,
                     )
                     await ws.send(reg.model_dump_json())
-                    logger.info(f"Registered as '{self.agent_name}'")
+                    logger.info(f"Registered as '{self.agent_name}' (version {self._version})")
 
                     async for message in ws:
                         response = await self._handle_message(message)

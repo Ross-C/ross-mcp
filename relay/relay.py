@@ -205,6 +205,7 @@ async def status(_: str = Depends(verify_api_key)):
                 "capabilities": [c.value for c in a.registration.capabilities],
                 "connected_at": a.connected_at.isoformat(),
                 "last_seen": a.last_seen.isoformat(),
+                "version": getattr(a.registration, 'version', None),
             }
             for name, a in agents.items()
         },
