@@ -568,6 +568,55 @@ async def add_email_attachment(
 
 
 
+# --- CBS Support Ticket Tools ---
+
+
+@mcp.tool()
+async def cbs_list_tickets(
+    state: str = "open",
+    per_page: int = 20,
+) -> str:
+    """List CBS support tickets. Use this when asked about CBS support tickets, e.g. "Do we have any CBS support tickets?"
+
+    Args:
+        state: Ticket state filter: open, hold, closed, snoozed, archived (default: open)
+        per_page: Max tickets to return (default 20)
+    """
+    result = await _send("cbs_list_tickets", {"state": state, "per_page": per_page})
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def cbs_get_ticket(ticket_id: str) -> str:
+    """Get full details and message history for a CBS support ticket.
+
+    Args:
+        ticket_id: The ticket ID (from cbs_list_tickets)
+    """
+    result = await _send("cbs_get_ticket", {"ticket_id": ticket_id})
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def cbs_reply_ticket(ticket_id: str, body: str) -> str:
+    """Send a reply to a CBS support ticket as Ross Calvert. This sends IMMEDIATELY (Enchant has no draft mode).
+
+    IMPORTANT WORKFLOW: When Ross asks to reply to a CBS ticket, NEVER call this tool straight away.
+    1. First, read the ticket (cbs_get_ticket) to understand the full conversation.
+    2. Take Ross's description of what he wants to say and enrich it into a professional,
+       friendly support response. Keep it conversational and helpful, not corporate.
+       Never use em dashes. Sign off with just "Ross" (no "Kind regards" for support tickets).
+    3. Present the drafted reply to Ross for review.
+    4. Only call this tool AFTER Ross has approved the text.
+
+    Args:
+        ticket_id: The ticket ID to reply to
+        body: The reply body (plain text)
+    """
+    result = await _send("cbs_reply_ticket", {"ticket_id": ticket_id, "body": body})
+    return json.dumps(result, indent=2)
+
+
 # --- Document Tools ---
 
 

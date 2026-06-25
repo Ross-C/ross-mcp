@@ -49,6 +49,10 @@ class CommandType(str, Enum):
     GMAIL_CREATE_DRAFT = "gmail_create_draft"
     GMAIL_ARCHIVE = "gmail_archive"
     GMAIL_LIST_LABELS = "gmail_list_labels"
+    # CBS Support (Enchant)
+    CBS_LIST_TICKETS = "cbs_list_tickets"
+    CBS_GET_TICKET = "cbs_get_ticket"
+    CBS_REPLY_TICKET = "cbs_reply_ticket"
     # System
     UPDATE_AGENT = "update_agent"
     AGENT_STATUS = "agent_status"
@@ -267,6 +271,22 @@ class GmailCreateDraftPayload(BaseModel):
 class GmailArchivePayload(BaseModel):
     message_id: str
 
+
+
+# --- CBS Support (Enchant) Payloads ---
+
+class CBSListTicketsPayload(BaseModel):
+    state: str = "open"
+    per_page: int = 20
+
+
+class CBSGetTicketPayload(BaseModel):
+    ticket_id: str
+
+
+class CBSReplyTicketPayload(BaseModel):
+    ticket_id: str
+    body: str
 
 
 class UpdateAgentPayload(BaseModel):

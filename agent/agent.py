@@ -57,6 +57,9 @@ from shared.messages import (
     GmailGetThreadPayload,
     GmailCreateDraftPayload,
     GmailArchivePayload,
+    CBSListTicketsPayload,
+    CBSGetTicketPayload,
+    CBSReplyTicketPayload,
     UpdateAgentPayload,
 )
 from agent.services.reminders import RemindersService
@@ -68,6 +71,7 @@ from agent.services.gmail import GmailService
 from agent.services.notes import NotesService
 from agent.services.voice_memos import VoiceMemosService
 from agent.services.documents import DocumentService
+from agent.services.enchant_cbs import EnchantCBSService
 
 load_dotenv()
 LOG_DIR = Path.home() / "Library/Logs/mcp-agent"
@@ -96,6 +100,7 @@ class Agent:
         self.notes = NotesService()
         self.voice_memos = VoiceMemosService()
         self.documents = DocumentService()
+        self.enchant_cbs = EnchantCBSService()
         self._running = True
         self._version = self._get_git_version()
 
@@ -141,6 +146,12 @@ class Agent:
                         CommandType.UPDATE_AGENT,
                     CommandType.PING,
                     ]
+                    if self.enchant_cbs.is_configured:
+                        capabilities.extend([
+                            CommandType.CBS_LIST_TICKETS,
+                            CommandType.CBS_GET_TICKET,
+                            CommandType.CBS_REPLY_TICKET,
+                        ])
                     if self.google_auth.is_authenticated:
                         capabilities.extend([
                             CommandType.GMAIL_SEARCH,
@@ -298,6 +309,16 @@ class Agent:
                     result = await self.gmail.archive_email(message_id=p.message_id)
                 case CommandType.GMAIL_LIST_LABELS:
                     result = await self.gmail.list_labels()
+                # --- CBS Support (Enchant) ---
+                case CommandType.CBS_LIST_TICKETS:
+                    p = CBSListTicketsPayload(**cmd.payload)
+                    result = await self.enchant_cbs.list_tickets(state=p.state, per_page=p.per_page)
+                case CommandType.CBS_GET_TICKET:
+                    p = CBSGetTicketPayload(**cmd.payload)
+                    result = await self.enchant_cbs.get_ticket(ticket_id=p.ticket_id)
+                case CommandType.CBS_REPLY_TICKET:
+                    p = CBSReplyTicketPayload(**cmd.payload)
+                    result = await self.enchant_cbs.reply_ticket(ticket_id=p.ticket_id, body=p.body)
                 # --- Documents ---
                 case CommandType.CONVERT_MD_TO_PDF:
                     p = ConvertDocumentPayload(**cmd.payload)

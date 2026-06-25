@@ -337,6 +337,39 @@ async def add_attachment(req: AddAttachmentRequest, _=Depends(_get_api_key)):
 
 
 # =====================
+# CBS Support Tickets
+# =====================
+
+class CBSListTicketsRequest(BaseModel):
+    state: str = Field(default="open", description="Ticket state: open, hold, closed, snoozed, archived")
+    per_page: int = Field(default=20, description="Max tickets to return")
+
+
+@router.post("/cbs-list-tickets", summary="List CBS support tickets")
+async def cbs_list_tickets(req: CBSListTicketsRequest, _=Depends(_get_api_key)):
+    return await _run("cbs_list_tickets", {"state": req.state, "per_page": req.per_page})
+
+
+class CBSGetTicketRequest(BaseModel):
+    ticket_id: str = Field(description="Ticket ID from cbs-list-tickets")
+
+
+@router.post("/cbs-get-ticket", summary="Get CBS ticket details and messages")
+async def cbs_get_ticket(req: CBSGetTicketRequest, _=Depends(_get_api_key)):
+    return await _run("cbs_get_ticket", {"ticket_id": req.ticket_id})
+
+
+class CBSReplyTicketRequest(BaseModel):
+    ticket_id: str = Field(description="Ticket ID to reply to")
+    body: str = Field(description="Reply body (plain text). Enrich the user's description into a professional, friendly support response. Never use em dashes. Sign off with just 'Ross'. Sent as Ross Calvert. SENDS IMMEDIATELY — always confirm with user first.")
+
+
+@router.post("/cbs-reply-ticket", summary="Reply to a CBS support ticket as Ross Calvert. SENDS IMMEDIATELY. Always draft the reply, show it to the user, and get approval before calling this.")
+async def cbs_reply_ticket(req: CBSReplyTicketRequest, _=Depends(_get_api_key)):
+    return await _run("cbs_reply_ticket", {"ticket_id": req.ticket_id, "body": req.body})
+
+
+# =====================
 # Voice Memos
 # =====================
 
