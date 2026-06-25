@@ -52,7 +52,9 @@ class CommandType(str, Enum):
     # CBS Support (Enchant)
     CBS_LIST_TICKETS = "cbs_list_tickets"
     CBS_GET_TICKET = "cbs_get_ticket"
-    CBS_REPLY_TICKET = "cbs_reply_ticket"
+    # RCSC Support (Enchant)
+    RCSC_LIST_TICKETS = "rcsc_list_tickets"
+    RCSC_GET_TICKET = "rcsc_get_ticket"
     # System
     UPDATE_AGENT = "update_agent"
     AGENT_STATUS = "agent_status"
@@ -284,9 +286,15 @@ class CBSGetTicketPayload(BaseModel):
     ticket_id: str
 
 
-class CBSReplyTicketPayload(BaseModel):
+# --- RCSC Support (Enchant) Payloads ---
+
+class RCSCListTicketsPayload(BaseModel):
+    state: str = "open"
+    per_page: int = 20
+
+
+class RCSCGetTicketPayload(BaseModel):
     ticket_id: str
-    body: str
 
 
 class UpdateAgentPayload(BaseModel):

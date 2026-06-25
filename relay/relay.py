@@ -87,7 +87,8 @@ TASK_DESCRIPTIONS = {
     "convert_md_to_docx": "Converting to DOCX",
     "cbs_list_tickets": "Checking CBS tickets",
     "cbs_get_ticket": "Reading CBS ticket",
-    "cbs_reply_ticket": "Replying to CBS ticket",
+    "rcsc_list_tickets": "Checking RCSC tickets",
+    "rcsc_get_ticket": "Reading RCSC ticket",
     "update_agent": "Updating agent",
     "ping": "Ping",
 }

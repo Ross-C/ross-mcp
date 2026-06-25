@@ -59,7 +59,8 @@ from shared.messages import (
     GmailArchivePayload,
     CBSListTicketsPayload,
     CBSGetTicketPayload,
-    CBSReplyTicketPayload,
+    RCSCListTicketsPayload,
+    RCSCGetTicketPayload,
     UpdateAgentPayload,
 )
 from agent.services.reminders import RemindersService
@@ -72,6 +73,7 @@ from agent.services.notes import NotesService
 from agent.services.voice_memos import VoiceMemosService
 from agent.services.documents import DocumentService
 from agent.services.enchant_cbs import EnchantCBSService
+from agent.services.enchant_rcsc import EnchantRCSCService
 
 load_dotenv()
 LOG_DIR = Path.home() / "Library/Logs/mcp-agent"
@@ -101,6 +103,7 @@ class Agent:
         self.voice_memos = VoiceMemosService()
         self.documents = DocumentService()
         self.enchant_cbs = EnchantCBSService()
+        self.enchant_rcsc = EnchantRCSCService()
         self._running = True
         self._version = self._get_git_version()
 
@@ -150,7 +153,11 @@ class Agent:
                         capabilities.extend([
                             CommandType.CBS_LIST_TICKETS,
                             CommandType.CBS_GET_TICKET,
-                            CommandType.CBS_REPLY_TICKET,
+                        ])
+                    if self.enchant_rcsc.is_configured:
+                        capabilities.extend([
+                            CommandType.RCSC_LIST_TICKETS,
+                            CommandType.RCSC_GET_TICKET,
                         ])
                     if self.google_auth.is_authenticated:
                         capabilities.extend([
@@ -316,9 +323,13 @@ class Agent:
                 case CommandType.CBS_GET_TICKET:
                     p = CBSGetTicketPayload(**cmd.payload)
                     result = await self.enchant_cbs.get_ticket(ticket_id=p.ticket_id)
-                case CommandType.CBS_REPLY_TICKET:
-                    p = CBSReplyTicketPayload(**cmd.payload)
-                    result = await self.enchant_cbs.reply_ticket(ticket_id=p.ticket_id, body=p.body)
+                # --- RCSC Support (Enchant) ---
+                case CommandType.RCSC_LIST_TICKETS:
+                    p = RCSCListTicketsPayload(**cmd.payload)
+                    result = await self.enchant_rcsc.list_tickets(state=p.state, per_page=p.per_page)
+                case CommandType.RCSC_GET_TICKET:
+                    p = RCSCGetTicketPayload(**cmd.payload)
+                    result = await self.enchant_rcsc.get_ticket(ticket_id=p.ticket_id)
                 # --- Documents ---
                 case CommandType.CONVERT_MD_TO_PDF:
                     p = ConvertDocumentPayload(**cmd.payload)

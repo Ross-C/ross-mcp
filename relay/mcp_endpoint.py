@@ -568,7 +568,10 @@ async def add_email_attachment(
 
 
 
-# --- CBS Support Ticket Tools ---
+# --- Support Ticket Tools (read-only) ---
+# Two separate systems: CBS and RCSC. When the user asks generically about
+# "support tickets" without specifying which, call BOTH list tools and
+# summarise the results together.
 
 
 @mcp.tool()
@@ -576,7 +579,7 @@ async def cbs_list_tickets(
     state: str = "open",
     per_page: int = 20,
 ) -> str:
-    """List CBS support tickets. Use this when asked about CBS support tickets, e.g. "Do we have any CBS support tickets?"
+    """List CBS support tickets. Use when asked about CBS tickets, or when asked generically about "support tickets" (call both cbs_list_tickets and rcsc_list_tickets and summarise together).
 
     Args:
         state: Ticket state filter: open, hold, closed, snoozed, archived (default: open)
@@ -598,22 +601,28 @@ async def cbs_get_ticket(ticket_id: str) -> str:
 
 
 @mcp.tool()
-async def cbs_reply_ticket(ticket_id: str, body: str) -> str:
-    """Send a reply to a CBS support ticket as Ross Calvert. This sends IMMEDIATELY (Enchant has no draft mode).
-
-    IMPORTANT WORKFLOW: When Ross asks to reply to a CBS ticket, NEVER call this tool straight away.
-    1. First, read the ticket (cbs_get_ticket) to understand the full conversation.
-    2. Take Ross's description of what he wants to say and enrich it into a professional,
-       friendly support response. Keep it conversational and helpful, not corporate.
-       Never use em dashes. Sign off with just "Ross" (no "Kind regards" for support tickets).
-    3. Present the drafted reply to Ross for review.
-    4. Only call this tool AFTER Ross has approved the text.
+async def rcsc_list_tickets(
+    state: str = "open",
+    per_page: int = 20,
+) -> str:
+    """List RCSC support tickets. Use when asked about RCSC tickets, or when asked generically about "support tickets" (call both cbs_list_tickets and rcsc_list_tickets and summarise together).
 
     Args:
-        ticket_id: The ticket ID to reply to
-        body: The reply body (plain text)
+        state: Ticket state filter: open, hold, closed, snoozed, archived (default: open)
+        per_page: Max tickets to return (default 20)
     """
-    result = await _send("cbs_reply_ticket", {"ticket_id": ticket_id, "body": body})
+    result = await _send("rcsc_list_tickets", {"state": state, "per_page": per_page})
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def rcsc_get_ticket(ticket_id: str) -> str:
+    """Get full details and message history for an RCSC support ticket.
+
+    Args:
+        ticket_id: The ticket ID (from rcsc_list_tickets)
+    """
+    result = await _send("rcsc_get_ticket", {"ticket_id": ticket_id})
     return json.dumps(result, indent=2)
 
 

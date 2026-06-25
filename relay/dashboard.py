@@ -559,7 +559,8 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         'Notes': ['search_notes', 'get_note', 'create_note', 'list_note_folders'],
         'Voice': ['list_recordings', 'transcribe_recording'],
         'Documents': ['convert_md_to_pdf', 'convert_md_to_docx'],
-        'CBS Support': ['cbs_list_tickets', 'cbs_get_ticket', 'cbs_reply_ticket'],
+        'CBS Support': ['cbs_list_tickets', 'cbs_get_ticket'],
+        'RCSC Support': ['rcsc_list_tickets', 'rcsc_get_ticket'],
         'System': ['update_agent', 'agent_status', 'ping'],
     };
 
@@ -574,6 +575,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         'Voice': '#f9a8d4',
         'Documents': '#67e8f9',
         'CBS Support': '#fb923c',
+        'RCSC Support': '#a78bfa',
         'System': '#cbd5e1',
     };
 
@@ -610,7 +612,8 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         'agent_status': 'Agent status',
         'cbs_list_tickets': 'List CBS tickets',
         'cbs_get_ticket': 'Read CBS ticket',
-        'cbs_reply_ticket': 'Reply to CBS ticket',
+        'rcsc_list_tickets': 'List RCSC tickets',
+        'rcsc_get_ticket': 'Read RCSC ticket',
         'ping': 'Ping',
     };
 
