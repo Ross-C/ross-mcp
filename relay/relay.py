@@ -59,11 +59,28 @@ security = HTTPBearer()
 
 @app.exception_handler(RequestValidationError)
 async def validation_error_handler(request: Request, exc: RequestValidationError):
+    import json as _json
     errors = exc.errors()
     details = "; ".join(f"{e.get('loc', ['?'])[-1]}: {e.get('msg', 'invalid')}" for e in errors)
+    error_msg = f"Invalid request: {details}"
+
+    # Capture failed request for retry
+    if request.url.path.startswith("/api/tools/"):
+        try:
+            body = exc.body if hasattr(exc, 'body') else {}
+            from relay.dashboard import record_failed_request
+            record_failed_request(
+                endpoint=request.url.path,
+                payload=_json.dumps(body) if body else "{}",
+                error=error_msg,
+                source=_detect_source(request),
+            )
+        except Exception:
+            pass
+
     return JSONResponse(
         status_code=200,
-        content={"error": f"Invalid request: {details}"},
+        content={"error": error_msg},
     )
 
 
@@ -75,6 +92,16 @@ async def http_error_handler(request: Request, exc: HTTPException):
         status_code=200,
         content={"error": f"Error ({exc.status_code}): {exc.detail}"},
     )
+
+
+def _detect_source(request: Request) -> str:
+    """Detect whether the request came from ElevenLabs, ChatGPT, or other."""
+    ua = request.headers.get("user-agent", "")
+    if "elevenlabs" in ua.lower() or "eleven" in ua.lower():
+        return "elevenlabs"
+    if "openai" in ua.lower() or "chatgpt" in ua.lower():
+        return "chatgpt"
+    return "api"
 
 
 # --- Agent Registry ---

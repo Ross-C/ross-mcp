@@ -63,6 +63,17 @@ def _init_db():
             summary TEXT NOT NULL
         )""")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_updates_ts ON updates(timestamp)")
+        conn.execute("""CREATE TABLE IF NOT EXISTS failed_requests (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TEXT NOT NULL,
+            endpoint TEXT NOT NULL,
+            payload TEXT NOT NULL,
+            error TEXT NOT NULL,
+            source TEXT,
+            status TEXT NOT NULL DEFAULT 'failed',
+            reprocessed_at TEXT
+        )""")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_failed_ts ON failed_requests(timestamp)")
         conn.commit()
         conn.close()
 
@@ -90,6 +101,43 @@ def record_update(source: str, summary: str, version: str | None = None):
             )
     except Exception:
         pass
+
+
+def record_failed_request(endpoint: str, payload: str, error: str, source: str | None = None):
+    """Record a failed API request with its full payload for later retry."""
+    ts = datetime.now(timezone.utc).isoformat()
+    try:
+        with _get_db() as conn:
+            conn.execute(
+                "INSERT INTO failed_requests (timestamp, endpoint, payload, error, source) VALUES (?, ?, ?, ?, ?)",
+                (ts, endpoint, payload, error, source),
+            )
+            conn.execute("DELETE FROM failed_requests WHERE timestamp < datetime('now', '-30 days')")
+    except Exception:
+        pass
+
+
+def mark_reprocessed(request_id: int):
+    """Mark a failed request as reprocessed."""
+    ts = datetime.now(timezone.utc).isoformat()
+    try:
+        with _get_db() as conn:
+            conn.execute(
+                "UPDATE failed_requests SET status = 'reprocessed', reprocessed_at = ? WHERE id = ?",
+                (ts, request_id),
+            )
+    except Exception:
+        pass
+
+
+def get_failed_request(request_id: int) -> dict | None:
+    """Get a single failed request by ID."""
+    try:
+        with _get_db() as conn:
+            row = conn.execute("SELECT * FROM failed_requests WHERE id = ?", (request_id,)).fetchone()
+            return dict(row) if row else None
+    except Exception:
+        return None
 
 
 def record_command(command_type: str, agent_name: str, status: str, error: str | None = None):
@@ -155,6 +203,13 @@ def get_stats() -> dict:
             ):
                 updates.append(dict(row))
 
+            failed = []
+            for row in conn.execute(
+                "SELECT id, timestamp, endpoint, payload, error, source, status, reprocessed_at "
+                "FROM failed_requests ORDER BY id DESC LIMIT 100"
+            ):
+                failed.append(dict(row))
+
             return {
                 "total": total,
                 "by_type": by_type,
@@ -163,6 +218,7 @@ def get_stats() -> dict:
                 "recent": recent,
                 "recent_errors": recent_errors,
                 "updates": updates,
+                "failed_requests": failed,
             }
     except Exception as e:
         import traceback
@@ -262,6 +318,38 @@ async def dashboard_stats(request: Request):
             "current_task": task,
         }
     return {"agents": agent_data, "stats": get_stats()}
+
+
+@router.post("/api/dashboard/retry/{request_id}")
+async def retry_failed_request(request_id: int, request: Request):
+    """Retry a failed request by replaying its original payload."""
+    if not _verify_session(request):
+        return Response(status_code=401)
+
+    failed = get_failed_request(request_id)
+    if not failed:
+        return {"error": "Request not found"}
+
+    import json
+    import httpx
+
+    endpoint = failed["endpoint"]
+    payload = json.loads(failed["payload"])
+    api_key = os.getenv("RELAY_API_KEY", "")
+
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.post(
+                f"http://localhost:{os.getenv('RELAY_PORT', '8000')}{endpoint}",
+                json=payload,
+                headers={"Authorization": f"Bearer {api_key}"},
+            )
+            result = resp.json()
+
+        mark_reprocessed(request_id)
+        return {"status": "reprocessed", "result": result}
+    except Exception as e:
+        return {"error": f"Retry failed: {e}"}
 
 
 # Initialise DB on import
@@ -438,22 +526,8 @@ DASHBOARD_HTML = """<!DOCTYPE html>
 
         <!-- Errors Tab -->
         <div id="tab-errors" class="hidden">
-            <div class="bg-white border border-gray-200 rounded-xl overflow-hidden">
-                <div class="overflow-x-auto">
-                    <table class="w-full text-sm">
-                        <thead>
-                            <tr class="text-gray-400 text-xs uppercase tracking-wide border-b border-gray-100 bg-gray-50">
-                                <th class="text-left px-4 py-2.5 font-medium">Time</th>
-                                <th class="text-left px-4 py-2.5 font-medium">Command</th>
-                                <th class="text-left px-4 py-2.5 font-medium">Agent</th>
-                                <th class="text-left px-4 py-2.5 font-medium">Error</th>
-                            </tr>
-                        </thead>
-                        <tbody id="errors-body" class="divide-y divide-gray-50"></tbody>
-                    </table>
-                </div>
-                <div id="no-errors" class="hidden px-4 py-8 text-center text-gray-400 text-sm">No errors recorded</div>
-            </div>
+            <div class="space-y-3" id="failed-requests-list"></div>
+            <div id="no-errors" class="hidden bg-white border border-gray-200 rounded-xl px-4 py-8 text-center text-gray-400 text-sm">No failed requests</div>
         </div>
 
         <!-- Updates Tab -->
@@ -691,7 +765,8 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         const today = new Date().toISOString().split('T')[0];
         const todayData = byDate[today] || {};
         const todayTotal = Object.values(todayData).reduce((a, b) => a + b, 0);
-        const errorCount = (s.recent_errors || []).length;
+        const failedReqs = (s.failed_requests || []).filter(r => r.status === 'failed');
+        const errorCount = failedReqs.length;
 
         document.getElementById('stat-agents').textContent = Object.keys(dashData.agents).length;
         document.getElementById('stat-total').textContent = (s.total || 0).toLocaleString();
@@ -818,24 +893,70 @@ DASHBOARD_HTML = """<!DOCTYPE html>
 
     function renderErrors() {
         if (!dashData) return;
-        const errors = dashData.stats.recent_errors || [];
+        const failed = dashData.stats.failed_requests || [];
         const noErrors = document.getElementById('no-errors');
-        const tbody = document.getElementById('errors-body');
-        if (errors.length === 0) {
+        const list = document.getElementById('failed-requests-list');
+        if (failed.length === 0) {
             noErrors.classList.remove('hidden');
-            tbody.innerHTML = '';
+            list.innerHTML = '';
             return;
         }
         noErrors.classList.add('hidden');
-        tbody.innerHTML = errors.map(r => {
+        list.innerHTML = failed.map(r => {
             const time = new Date(r.timestamp).toLocaleString();
-            return `<tr class="hover:bg-gray-50">
-                <td class="px-4 py-2.5 text-gray-400 whitespace-nowrap">${time}</td>
-                <td class="px-4 py-2.5 text-gray-700 font-mono text-xs">${r.command_type || '-'}</td>
-                <td class="px-4 py-2.5 text-gray-400">${r.agent || '-'}</td>
-                <td class="px-4 py-2.5 text-red-600 text-xs max-w-md truncate">${r.error}</td>
-            </tr>`;
+            const isReprocessed = r.status === 'reprocessed';
+            const statusBadge = isReprocessed
+                ? '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-600">Reprocessed</span>'
+                : '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-600">Failed</span>';
+            const retryBtn = isReprocessed ? '' :
+                `<button onclick="retryRequest(${r.id})" class="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors">Retry</button>`;
+            let payloadStr = r.payload || '{}';
+            try { payloadStr = JSON.stringify(JSON.parse(payloadStr), null, 2); } catch(e) {}
+            const source = r.source ? `<span class="text-gray-400 text-xs ml-2">${r.source}</span>` : '';
+            return `<div class="bg-white border border-gray-200 rounded-xl p-4">
+                <div class="flex items-center justify-between mb-2">
+                    <div class="flex items-center gap-2">
+                        ${statusBadge}
+                        <span class="text-gray-700 font-mono text-sm">${r.endpoint}</span>
+                        ${source}
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <span class="text-xs text-gray-400">${time}</span>
+                        ${retryBtn}
+                    </div>
+                </div>
+                <div class="text-red-600 text-sm mb-2">${r.error}</div>
+                <details>
+                    <summary class="text-xs text-gray-400 cursor-pointer hover:text-gray-600">Show payload</summary>
+                    <pre class="mt-2 bg-gray-50 border border-gray-200 rounded-lg p-3 text-xs font-mono text-gray-700 overflow-x-auto max-h-48 overflow-y-auto">${payloadStr.replace(/</g,'&lt;')}</pre>
+                </details>
+                ${isReprocessed ? '<div class="text-xs text-emerald-500 mt-2">Reprocessed at ' + new Date(r.reprocessed_at).toLocaleString() + '</div>' : ''}
+            </div>`;
         }).join('');
+    }
+
+    async function retryRequest(id) {
+        const btn = event.target;
+        btn.disabled = true;
+        btn.textContent = 'Retrying...';
+        try {
+            const resp = await fetch('/api/dashboard/retry/' + id, { method: 'POST' });
+            const data = await resp.json();
+            if (data.error) {
+                alert('Retry failed: ' + data.error);
+                btn.textContent = 'Retry';
+                btn.disabled = false;
+            } else {
+                btn.textContent = 'Done';
+                btn.classList.replace('bg-blue-600', 'bg-emerald-600');
+                btn.classList.replace('hover:bg-blue-700', 'hover:bg-emerald-700');
+                fetchData();
+            }
+        } catch (e) {
+            alert('Retry failed: ' + e.message);
+            btn.textContent = 'Retry';
+            btn.disabled = false;
+        }
     }
 
     function updateCharts() {

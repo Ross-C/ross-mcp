@@ -44,9 +44,29 @@ def _get_api_key(credentials: HTTPAuthorizationCredentials = Depends(_security))
 
 
 async def _run(command_type: str, payload: dict = {}) -> dict:
+    import json as _json
     from shared.messages import CommandType
-    result = await _execute_command(CommandType(command_type), payload)
-    return result.get("data", result)
+    try:
+        result = await _execute_command(CommandType(command_type), payload)
+        # Check for agent-level errors
+        if result.get("status") == "error" and result.get("error"):
+            from relay.dashboard import record_failed_request
+            record_failed_request(
+                endpoint=f"/api/tools/{command_type.replace('_', '-')}",
+                payload=_json.dumps(payload),
+                error=result["error"],
+                source="agent",
+            )
+        return result.get("data", result)
+    except HTTPException as e:
+        from relay.dashboard import record_failed_request
+        record_failed_request(
+            endpoint=f"/api/tools/{command_type.replace('_', '-')}",
+            payload=_json.dumps(payload),
+            error=f"HTTP {e.status_code}: {e.detail}",
+            source="relay",
+        )
+        raise
 
 
 def _auth():
