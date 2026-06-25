@@ -1,11 +1,24 @@
-# Project Rules
+# Ross MCP — Virtual PA System
+
+A virtual PA to help Ross manage admin bottlenecks. Accessible from Claude Code, Claude Desktop, ChatGPT, and voice (ElevenLabs agent via phone).
 
 ## Architecture
 
-Client (Claude/ChatGPT/API) → Cloud Relay (Fly.io) → Local Mac Agent → Apple APIs / Microsoft Graph
+```
+Claude Code / Claude Desktop / Claude Web
+    → MCP (streamable-http) → Fly.io Relay → WebSocket → Local Mac Agent → Apple APIs / Microsoft Graph
 
-All clients connect to the **same remote MCP endpoint**: `https://ross-mcp-relay.fly.dev/mcp/mcp`
-No local MCP server needed. The relay routes commands to whichever agent is online.
+ChatGPT Custom GPT
+    → REST API (/api/tools/*) → Fly.io Relay → WebSocket → Local Mac Agent
+
+Phone (ElevenLabs Voice Agent)
+    → Telnyx SIP → ElevenLabs → Webhook tools (/api/tools/*) → Fly.io Relay → WebSocket → Local Mac Agent
+```
+
+All clients connect to the **same relay**: `https://ross-mcp-relay.fly.dev`
+- MCP endpoint: `/mcp/mcp`
+- REST/OpenAI endpoint: `/api/tools/*`
+- Dashboard: `/` (password protected)
 
 ## Deploying Changes
 
@@ -24,7 +37,37 @@ When adding a new tool, update ALL of these:
 2. `agent/agent.py` — add capability to registration list + handler in `_handle_message`
 3. `relay/mcp_endpoint.py` — add `@mcp.tool()` function
 4. `relay/openai_endpoints.py` — add request model + endpoint
-5. `mcp_server.py` — add tool (legacy, optional)
+5. ElevenLabs — create webhook tool via API pointing to `/api/tools/<slug>` and add to agent's `tool_ids`
+
+## Clients
+
+### Claude Code / Claude Desktop / Claude Web
+- MCP server: `https://ross-mcp-relay.fly.dev/mcp/mcp` (streamable-http, Bearer token auth)
+- Email style rules embedded in MCP `instructions` and tool docstrings
+
+### ChatGPT Custom GPT
+- Actions imported from: `https://ross-mcp-relay.fly.dev/openapi.json`
+- Auth: API Key, Bearer token (RELAY_API_KEY)
+- New endpoints auto-discovered from OpenAPI spec on deploy
+- Max 30 operations (internal routes excluded via `include_in_schema=False`)
+
+### ElevenLabs Voice Agent
+- Agent ID: `agent_1601kvz6xrrje8avnvdcchnsnwcf`
+- Voice: Kerry — Northern UK female (`Q7iNt6VsGSsBbtyUto9N`)
+- Model: `eleven_turbo_v2_5` (low latency)
+- 14 webhook tools pointing to `/api/tools/*`, authed via workspace secret `G8E20IiwKsZx00jnMr1I`
+- Phone: +441615203725 (Telnyx) → SIP → ElevenLabs → agent
+
+### Voice Agent Security
+- **SIP-level**: Only `+447500221211` allowed (enforced by ElevenLabs `allowed_numbers`)
+- **Agent-level**: Security code `205492` — agent asks for 2 random digits before any tool use
+- Both layers must pass before any actions are taken
+
+### Phone Routing (Telnyx → ElevenLabs)
+- Telnyx FQDN connection `2990033598767171037` → `sip.rtc.elevenlabs.io:5060` (TCP)
+- ElevenLabs phone number ID: `phnum_2601kvz79axqe8ka813gm8ptfp53`
+- No SIP auth (relies on IP allowlist + caller number restriction)
+- `trunk1` connection (`2834172269066978794`) is a SEPARATE system — do not modify
 
 ## Email Drafting Style
 
@@ -75,6 +118,23 @@ When transcribing meetings:
 - Always use Apple Reminders MCP tools
 - If a time is given without a date and hasn't passed today, use today
 - Only use tomorrow if the time has already passed
+
+## Agents
+
+- `macbook-pro` — Ross's M3 Pro MacBook (user: ross, home: /Users/ross)
+- `mac-mini` — Mac Mini (user: neo@192.168.5.120, home: /Users/neo, Python: /opt/homebrew/bin/python3.13)
+- Both run via launchd (`com.ross.mcp-agent`) with KeepAlive
+- WebSocket ping keepalives (20s interval, 10s timeout)
+- Rotating logs at `~/Library/Logs/mcp-agent/agent.log` (2MB, 3 backups)
+
+## Dashboard
+
+- URL: `https://ross-mcp-relay.fly.dev/`
+- Sessions persist in SQLite across deploys
+- Live task tracking: running (blue pulse) → done (green tick, 5s) → idle
+- Activity/Updates paginated at 25 per page
+- 30-day auto-cleanup on all data
+- 3-second refresh interval
 
 ## Venv Setup (Apple Silicon)
 
