@@ -559,6 +559,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         'Notes': ['search_notes', 'get_note', 'create_note', 'list_note_folders'],
         'Voice': ['list_recordings', 'transcribe_recording'],
         'Documents': ['convert_md_to_pdf', 'convert_md_to_docx'],
+        'CBS Support': ['cbs_list_tickets', 'cbs_get_ticket', 'cbs_reply_ticket'],
         'System': ['update_agent', 'agent_status', 'ping'],
     };
 
@@ -572,6 +573,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         'Notes': '#c4b5fd',
         'Voice': '#f9a8d4',
         'Documents': '#67e8f9',
+        'CBS Support': '#fb923c',
         'System': '#cbd5e1',
     };
 
@@ -606,6 +608,9 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         'convert_md_to_docx': 'MD to DOCX',
         'update_agent': 'Update agent',
         'agent_status': 'Agent status',
+        'cbs_list_tickets': 'List CBS tickets',
+        'cbs_get_ticket': 'Read CBS ticket',
+        'cbs_reply_ticket': 'Reply to CBS ticket',
         'ping': 'Ping',
     };
 
@@ -717,6 +722,12 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         const el = document.getElementById('agents-list');
         const entries = Object.entries(dashData.agents);
         const byAgent = dashData.stats.by_agent || {};
+        // Preserve open/closed state of capability details across refreshes
+        const openDetails = new Set();
+        el.querySelectorAll('details[open]').forEach(d => {
+            const name = d.dataset.agent;
+            if (name) openDetails.add(name);
+        });
         if (entries.length === 0) {
             el.innerHTML = '<div class="bg-white border border-gray-200 rounded-xl p-6 text-center text-gray-400">No agents connected</div>';
             return;
@@ -760,7 +771,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
                     Connected ${connectedAt.toLocaleString()} &middot; Uptime: ${uptime} &middot; ${info.capabilities.length} tools
                 </div>
                 ${taskHtml}
-                <details class="mt-3">
+                <details class="mt-3" data-agent="${name}" ${openDetails.has(name) ? 'open' : ''}>
                     <summary class="text-xs text-gray-400 cursor-pointer hover:text-gray-600">Show capabilities</summary>
                     <div class="flex flex-wrap gap-1.5 mt-2">
                         ${info.capabilities.map(c => {

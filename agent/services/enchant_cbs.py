@@ -46,15 +46,12 @@ class EnchantCBSService:
                     "tickets": [
                         {
                             "id": t["id"],
-                            "number": t.get("number"),
                             "subject": t.get("subject", ""),
-                            "state": t.get("state"),
-                            "type": t.get("type"),
-                            "reply_to": t.get("reply_to", ""),
-                            "created_at": t.get("created_at"),
-                            "updated_at": t.get("updated_at"),
                             "customer": _format_customer(t.get("customer")),
+                            "reply_to": t.get("reply_to", ""),
                             "assigned_to": _format_user(t.get("user")),
+                            "state": t.get("state"),
+                            "updated_at": t.get("updated_at"),
                             "summary": (t.get("summary") or "")[:200],
                         }
                         for t in tickets
@@ -91,16 +88,13 @@ class EnchantCBSService:
 
                 return {
                     "id": t["id"],
-                    "number": t.get("number"),
                     "subject": t.get("subject", ""),
-                    "state": t.get("state"),
-                    "type": t.get("type"),
+                    "customer": _format_customer(t.get("customer")),
                     "reply_to": t.get("reply_to", ""),
                     "reply_cc": t.get("reply_cc", ""),
-                    "created_at": t.get("created_at"),
-                    "updated_at": t.get("updated_at"),
-                    "customer": _format_customer(t.get("customer")),
                     "assigned_to": _format_user(t.get("user")),
+                    "state": t.get("state"),
+                    "updated_at": t.get("updated_at"),
                     "messages": messages,
                 }
         except httpx.HTTPStatusError as e:
