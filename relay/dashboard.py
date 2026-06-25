@@ -24,8 +24,7 @@ def set_agents(agents_dict):
     global _agents_ref
     _agents_ref = agents_dict
 
-# Active sessions (in-memory, cleared on restart)
-active_sessions: set[str] = set()
+# Sessions are stored in SQLite so they persist across deploys
 MAX_SESSIONS = 20
 
 # --- SQLite ---
@@ -52,6 +51,10 @@ def _init_db():
         )""")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_commands_ts ON commands(timestamp)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_commands_type ON commands(command_type)")
+        conn.execute("""CREATE TABLE IF NOT EXISTS sessions (
+            token TEXT PRIMARY KEY,
+            created_at TEXT NOT NULL
+        )""")
         conn.commit()
         conn.close()
 
@@ -139,15 +142,30 @@ def get_stats() -> dict:
 
 def _create_session() -> str:
     token = secrets.token_urlsafe(32)
-    active_sessions.add(token)
-    if len(active_sessions) > MAX_SESSIONS:
-        active_sessions.pop()
+    try:
+        with _get_db() as conn:
+            conn.execute("INSERT INTO sessions (token, created_at) VALUES (?, ?)",
+                         (token, datetime.now(timezone.utc).isoformat()))
+            # Prune old sessions (keep most recent MAX_SESSIONS)
+            conn.execute(
+                "DELETE FROM sessions WHERE token NOT IN "
+                "(SELECT token FROM sessions ORDER BY created_at DESC LIMIT ?)",
+                (MAX_SESSIONS,))
+    except Exception:
+        pass
     return token
 
 
 def _verify_session(request: Request) -> bool:
     token = request.cookies.get("session")
-    return token is not None and token in active_sessions
+    if not token:
+        return False
+    try:
+        with _get_db() as conn:
+            row = conn.execute("SELECT created_at FROM sessions WHERE token = ?", (token,)).fetchone()
+            return row is not None
+    except Exception:
+        return False
 
 
 # --- Routes ---
