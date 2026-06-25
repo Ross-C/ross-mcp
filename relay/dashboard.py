@@ -15,6 +15,15 @@ router = APIRouter()
 DASHBOARD_PASSWORD = os.getenv("DASHBOARD_PASSWORD", "")
 DB_PATH = os.getenv("DB_PATH", "/data/mcp_stats.db")
 
+# Agents reference — set by relay.py to avoid circular import
+_agents_ref = None
+
+
+def set_agents(agents_dict):
+    """Called by relay.py to pass the agents dict reference."""
+    global _agents_ref
+    _agents_ref = agents_dict
+
 # Active sessions (in-memory, cleared on restart)
 active_sessions: set[str] = set()
 MAX_SESSIONS = 20
@@ -145,7 +154,7 @@ def _verify_session(request: Request) -> bool:
 async def dashboard_root(request: Request):
     if not _verify_session(request):
         return HTMLResponse(LOGIN_HTML)
-    return HTMLResponse(DASHBOARD_HTML)
+    return HTMLResponse(DASHBOARD_HTML, headers={"Cache-Control": "no-cache"})
 
 
 @router.post("/login")
@@ -181,7 +190,7 @@ async def logout():
 async def dashboard_stats(request: Request):
     if not _verify_session(request):
         return Response(status_code=401)
-    from relay.relay import agents
+    agents = _agents_ref or {}
     agent_data = {}
     for name, a in agents.items():
         agent_data[name] = {

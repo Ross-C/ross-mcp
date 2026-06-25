@@ -214,7 +214,8 @@ async def status(_: str = Depends(verify_api_key)):
 
 # --- Mount dashboard and remote MCP endpoint ---
 
-from relay.dashboard import router as dashboard_router
+from relay.dashboard import router as dashboard_router, set_agents
+set_agents(agents)
 app.include_router(dashboard_router)
 
 from relay.mcp_endpoint import create_mcp_app, set_execute_command
