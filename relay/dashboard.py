@@ -93,7 +93,7 @@ def record_update(source: str, summary: str, version: str | None = None):
 
 
 def record_command(command_type: str, agent_name: str, status: str, error: str | None = None):
-    """Record a command execution to SQLite."""
+    """Record a command execution to SQLite. Prunes data older than 30 days."""
     ts = datetime.now(timezone.utc).isoformat()
     try:
         with _get_db() as conn:
@@ -106,6 +106,10 @@ def record_command(command_type: str, agent_name: str, status: str, error: str |
                     "INSERT INTO errors (timestamp, command_type, agent, error) VALUES (?, ?, ?, ?)",
                     (ts, command_type, agent_name, error),
                 )
+            # Prune old data (30 days)
+            conn.execute("DELETE FROM commands WHERE timestamp < datetime('now', '-30 days')")
+            conn.execute("DELETE FROM errors WHERE timestamp < datetime('now', '-30 days')")
+            conn.execute("DELETE FROM updates WHERE timestamp < datetime('now', '-30 days')")
     except Exception:
         pass  # Don't let stats recording break command execution
 
@@ -420,6 +424,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
                         <tbody id="activity-body" class="divide-y divide-gray-50"></tbody>
                     </table>
                 </div>
+                <div id="activity-pagination" class="px-4 py-3 border-t border-gray-100 flex items-center justify-between"></div>
             </div>
         </div>
 
@@ -452,6 +457,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
                 </div>
                 <div id="updates-list" class="divide-y divide-gray-50"></div>
                 <div id="no-updates" class="hidden px-4 py-8 text-center text-gray-400 text-sm">No updates recorded yet</div>
+                <div id="updates-pagination" class="px-4 py-3 border-t border-gray-100 flex items-center justify-between"></div>
             </div>
         </div>
 
@@ -516,6 +522,26 @@ DASHBOARD_HTML = """<!DOCTYPE html>
     let dashData = null;
     let dailyChart = null;
     let categoryChart = null;
+    let activityPage = 0;
+    let updatesPage = 0;
+    const PAGE_SIZE = 25;
+
+    function paginationHtml(totalItems, currentPage, onClickFn) {
+        const totalPages = Math.ceil(totalItems / PAGE_SIZE);
+        if (totalPages <= 1) return '';
+        const start = currentPage * PAGE_SIZE + 1;
+        const end = Math.min((currentPage + 1) * PAGE_SIZE, totalItems);
+        return `<span class="text-xs text-gray-400">${start}–${end} of ${totalItems}</span>
+            <div class="flex gap-1">
+                <button onclick="${onClickFn}(-1)" ${currentPage === 0 ? 'disabled' : ''}
+                    class="px-2.5 py-1 text-xs rounded border ${currentPage === 0 ? 'text-gray-300 border-gray-100 cursor-not-allowed' : 'text-gray-600 border-gray-200 hover:bg-gray-50'}">Prev</button>
+                <button onclick="${onClickFn}(1)" ${currentPage >= totalPages - 1 ? 'disabled' : ''}
+                    class="px-2.5 py-1 text-xs rounded border ${currentPage >= totalPages - 1 ? 'text-gray-300 border-gray-100 cursor-not-allowed' : 'text-gray-600 border-gray-200 hover:bg-gray-50'}">Next</button>
+            </div>`;
+    }
+
+    function changeActivityPage(dir) { activityPage = Math.max(0, activityPage + dir); renderActivity(); }
+    function changeUpdatesPage(dir) { updatesPage = Math.max(0, updatesPage + dir); renderUpdates(); }
 
     const TOOL_CATEGORIES = {
         'Email': ['search_emails', 'get_email', 'get_thread', 'create_draft', 'draft_reply', 'update_draft', 'send_draft', 'send_email', 'schedule_send', 'cancel_scheduled_send', 'archive_email', 'add_attachment'],
@@ -727,11 +753,13 @@ DASHBOARD_HTML = """<!DOCTYPE html>
     function renderActivity() {
         if (!dashData) return;
         const filter = (document.getElementById('activity-filter').value || '').toLowerCase();
-        const items = (dashData.stats.recent || []).filter(r =>
+        if (filter) activityPage = 0;
+        const allItems = (dashData.stats.recent || []).filter(r =>
             !filter || r.command_type.toLowerCase().includes(filter)
         );
-        document.getElementById('activity-count').textContent = items.length + ' commands';
-        document.getElementById('activity-body').innerHTML = items.map(r => {
+        const paged = allItems.slice(activityPage * PAGE_SIZE, (activityPage + 1) * PAGE_SIZE);
+        document.getElementById('activity-count').textContent = allItems.length + ' commands';
+        document.getElementById('activity-body').innerHTML = paged.map(r => {
             const time = new Date(r.timestamp).toLocaleString();
             const ok = r.status === 'success';
             const desc = TOOL_LABELS[r.command_type] || r.command_type;
@@ -746,6 +774,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
                 </td>
             </tr>`;
         }).join('');
+        document.getElementById('activity-pagination').innerHTML = paginationHtml(allItems.length, activityPage, 'changeActivityPage');
     }
 
     function renderErrors() {
@@ -883,16 +912,19 @@ DASHBOARD_HTML = """<!DOCTYPE html>
 
     function renderUpdates() {
         if (!dashData) return;
-        const updates = dashData.stats.updates || [];
+        const allUpdates = dashData.stats.updates || [];
         const el = document.getElementById('updates-list');
         const noUpdates = document.getElementById('no-updates');
-        document.getElementById('updates-count').textContent = updates.length + ' entries';
-        if (updates.length === 0) {
+        document.getElementById('updates-count').textContent = allUpdates.length + ' entries';
+        if (allUpdates.length === 0) {
             noUpdates.classList.remove('hidden');
             el.innerHTML = '';
+            document.getElementById('updates-pagination').innerHTML = '';
             return;
         }
         noUpdates.classList.add('hidden');
+
+        const paged = allUpdates.slice(updatesPage * PAGE_SIZE, (updatesPage + 1) * PAGE_SIZE);
 
         const SOURCE_ICONS = {
             'relay': '&#9881;',
@@ -900,7 +932,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
             'mac-mini': '&#9899;',
         };
 
-        el.innerHTML = updates.map(u => {
+        el.innerHTML = paged.map(u => {
             const time = new Date(u.timestamp).toLocaleString();
             const icon = SOURCE_ICONS[u.source] || '&#8226;';
             const ver = u.version ? `<span class="text-gray-400 font-mono text-xs ml-2">${u.version}</span>` : '';
@@ -916,6 +948,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
                 </div>
             </div>`;
         }).join('');
+        document.getElementById('updates-pagination').innerHTML = paginationHtml(allUpdates.length, updatesPage, 'changeUpdatesPage');
     }
 
     fetchData();
