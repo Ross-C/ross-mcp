@@ -302,7 +302,7 @@ def get_stats() -> dict:
             ):
                 failed.append(dict(row))
 
-            return {
+            stats = {
                 "total": total,
                 "by_type": by_type,
                 "by_date": by_date,
@@ -311,8 +311,10 @@ def get_stats() -> dict:
                 "recent_errors": recent_errors,
                 "updates": updates,
                 "failed_requests": failed,
-                "feedback": get_feedback(),
             }
+        # Fetch feedback outside the lock to avoid deadlock
+        stats["feedback"] = get_feedback()
+        return stats
     except Exception as e:
         import traceback
         traceback.print_exc()
