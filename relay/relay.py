@@ -198,10 +198,16 @@ async def execute_command(command_type: CommandType, payload: dict) -> dict:
             "command_type": command_type.value,
             "description": TASK_DESCRIPTIONS.get(command_type.value, command_type.value),
             "started_at": datetime.now(timezone.utc).isoformat(),
+            "status": "running",
         }
         await agent.ws.send_text(cmd.model_dump_json())
         response = await asyncio.wait_for(future, timeout=30)
-        agent.current_task = None
+        # Mark as done but keep visible for dashboard to catch
+        agent.current_task = {
+            **agent.current_task,
+            "status": "done",
+            "completed_at": datetime.now(timezone.utc).isoformat(),
+        }
 
         log_entry = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -230,7 +236,11 @@ async def execute_command(command_type: CommandType, payload: dict) -> dict:
         return response.model_dump()
 
     except asyncio.TimeoutError:
-        agent.current_task = None
+        agent.current_task = {
+            **(agent.current_task or {}),
+            "status": "done",
+            "completed_at": datetime.now(timezone.utc).isoformat(),
+        }
         from relay.dashboard import record_command
         record_command(
             command_type=command_type.value,
@@ -240,7 +250,12 @@ async def execute_command(command_type: CommandType, payload: dict) -> dict:
         )
         raise HTTPException(status_code=504, detail="Agent did not respond in time")
     except Exception:
-        agent.current_task = None
+        if agent.current_task:
+            agent.current_task = {
+                **agent.current_task,
+                "status": "done",
+                "completed_at": datetime.now(timezone.utc).isoformat(),
+            }
         raise
     finally:
         agent.pending_responses.pop(cmd.id, None)

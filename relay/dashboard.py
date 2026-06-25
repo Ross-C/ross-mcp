@@ -243,15 +243,23 @@ async def dashboard_stats(request: Request):
     if not _verify_session(request):
         return Response(status_code=401)
     agents = _agents_ref or {}
+    now = datetime.now(timezone.utc)
     agent_data = {}
     for name, a in agents.items():
+        task = a.current_task
+        # Clear completed tasks after 5 seconds
+        if task and task.get("status") == "done":
+            completed = datetime.fromisoformat(task["completed_at"])
+            if (now - completed).total_seconds() > 5:
+                a.current_task = None
+                task = None
         agent_data[name] = {
             "machine": a.registration.machine_name,
             "capabilities": [c.value for c in a.registration.capabilities],
             "connected_at": a.connected_at.isoformat(),
             "last_seen": a.last_seen.isoformat(),
             "version": getattr(a.registration, 'version', None),
-            "current_task": a.current_task,
+            "current_task": task,
         }
     return {"agents": agent_data, "stats": get_stats()}
 
@@ -639,12 +647,21 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         el.innerHTML = '<div class="grid grid-cols-1 sm:grid-cols-' + Math.min(entries.length, 3) + ' gap-3">' +
             entries.map(([name, info]) => {
                 const task = info.current_task;
-                if (task) {
+                if (task && task.status === 'running') {
                     return `<div class="bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-center gap-3">
                         <div class="w-2 h-2 rounded-full bg-blue-500 animate-pulse flex-shrink-0"></div>
                         <div>
                             <span class="text-gray-900 font-semibold text-sm">${name}</span>
                             <span class="text-blue-700 text-sm ml-2">${task.description}</span>
+                        </div>
+                    </div>`;
+                }
+                if (task && task.status === 'done') {
+                    return `<div class="bg-emerald-50 border border-emerald-200 rounded-xl p-4 flex items-center gap-3">
+                        <svg class="w-4 h-4 text-emerald-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                        <div>
+                            <span class="text-gray-900 font-semibold text-sm">${name}</span>
+                            <span class="text-emerald-600 text-sm ml-2">${task.description}</span>
                         </div>
                     </div>`;
                 }
@@ -711,15 +728,23 @@ DASHBOARD_HTML = """<!DOCTYPE html>
             const cmdCount = byAgent[name] || 0;
             const ver = info.version ? `<span class="text-gray-400 text-xs font-mono">${info.version}</span>` : '';
             const task = info.current_task;
-            const taskHtml = task
-                ? `<div class="flex items-center gap-2 mt-3 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg">
+            let taskHtml;
+            if (task && task.status === 'running') {
+                taskHtml = `<div class="flex items-center gap-2 mt-3 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg">
                     <div class="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></div>
                     <span class="text-blue-700 text-sm font-medium">${task.description}</span>
-                   </div>`
-                : `<div class="flex items-center gap-2 mt-3 px-3 py-2 bg-gray-50 border border-gray-100 rounded-lg">
+                   </div>`;
+            } else if (task && task.status === 'done') {
+                taskHtml = `<div class="flex items-center gap-2 mt-3 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg">
+                    <svg class="w-3.5 h-3.5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                    <span class="text-emerald-600 text-sm font-medium">${task.description}</span>
+                   </div>`;
+            } else {
+                taskHtml = `<div class="flex items-center gap-2 mt-3 px-3 py-2 bg-gray-50 border border-gray-100 rounded-lg">
                     <div class="w-1.5 h-1.5 rounded-full bg-gray-300"></div>
                     <span class="text-gray-400 text-sm">Idle</span>
                    </div>`;
+            }
             return `
             <div class="bg-white border border-gray-200 rounded-xl p-5">
                 <div class="flex items-center justify-between mb-3">
