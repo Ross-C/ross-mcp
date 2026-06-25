@@ -132,13 +132,13 @@ async def get_email_thread(req: GetThreadRequest, _=Depends(_get_api_key)):
 
 class CreateDraftRequest(BaseModel):
     subject: str = Field(description="Email subject")
-    body: str = Field(description="Email body (HTML by default)")
+    body: str = Field(description="Email body in HTML. Wrap in Aptos font div. Use <p> tags for paragraphs. Always enrich and polish the user's input, never parrot verbatim. No em dashes or hyphens joining clauses. Sign off Kind regards / Ross.")
     to: list[str] = Field(description="Recipient email addresses")
     cc: list[str] | None = Field(default=None, description="CC addresses")
-    body_type: str = Field(default="HTML", description="HTML or Text")
+    body_type: str = Field(default="HTML", description="Always use HTML")
 
 
-@router.post("/create-draft", summary="Create an Outlook email draft")
+@router.post("/create-draft", summary="Create an Outlook email draft. Enrich the user's input into a polished email in Ross's style.")
 async def create_draft(req: CreateDraftRequest, _=Depends(_get_api_key)):
     payload: dict = {"subject": req.subject, "body": req.body, "to": req.to, "body_type": req.body_type}
     if req.cc: payload["cc"] = req.cc
@@ -147,12 +147,12 @@ async def create_draft(req: CreateDraftRequest, _=Depends(_get_api_key)):
 
 class DraftReplyRequest(BaseModel):
     message_id: str = Field(description="Message ID of the email to reply to")
-    body: str = Field(description="Reply body (HTML by default)")
+    body: str = Field(description="Reply body in HTML. Wrap in Aptos font div. Use <p> tags for paragraphs. Always enrich and polish the user's input, never parrot verbatim. No em dashes or hyphens joining clauses. Sign off Kind regards / Ross.")
     cc: list[str] | None = Field(default=None, description="CC addresses to add")
-    body_type: str = Field(default="HTML", description="HTML or Text")
+    body_type: str = Field(default="HTML", description="Always use HTML")
 
 
-@router.post("/draft-a-reply", summary="Create a draft reply to an existing email (in-thread)")
+@router.post("/draft-a-reply", summary="Create a draft reply to an existing email (in-thread). Enrich the user's input into a polished reply in Ross's style.")
 async def draft_a_reply(req: DraftReplyRequest, _=Depends(_get_api_key)):
     payload: dict = {"message_id": req.message_id, "body": req.body, "body_type": req.body_type}
     if req.cc: payload["cc"] = req.cc

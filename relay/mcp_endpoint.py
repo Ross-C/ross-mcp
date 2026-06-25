@@ -58,7 +58,22 @@ RELAY_HOST = os.getenv("RELAY_PUBLIC_HOST", "ross-mcp-relay.fly.dev")
 
 mcp = FastMCP(
     "Ross Life Admin",
-    instructions="Manage Apple Reminders, Outlook Email & Calendar via local Mac agents",
+    instructions=(
+        "Manage Apple Reminders, Outlook Email & Calendar via local Mac agents.\n\n"
+        "EMAIL STYLE (applies to ALL drafts and replies):\n"
+        "- Always enrich and polish what the user asks for. Never parrot their words back verbatim. "
+        "Take the intent and key points, then write a well-worded, natural email that sounds like "
+        "Ross wrote it carefully. Add appropriate context, smooth transitions, and proper phrasing.\n"
+        "- Greeting: 'Hi [Name]' for one, 'Hi [Name]/[Name]' for two, 'Hi all' for 3+.\n"
+        "- Tone: conversational and direct, not corporate.\n"
+        "- NEVER use em dashes or hyphens to join clauses. Use commas or full stops. Dashes look AI-generated.\n"
+        "- One thought per paragraph, keep paragraphs short.\n"
+        "- UK date format (DD/MM/YYYY).\n"
+        "- Sign off: 'Kind regards' then 'Ross' on the next line.\n"
+        "- Always use HTML body_type. Wrap in: <div style=\"font-family:Aptos,Arial,Helvetica,sans-serif;"
+        "font-size:12pt;color:rgb(0,0,0)\">...</div>. Use <p> tags for paragraphs.\n"
+        "- NEVER send emails. Only create drafts. Ross sends manually."
+    ),
     stateless_http=True,
     transport_security=TransportSecuritySettings(
         enable_dns_rebinding_protection=True,
@@ -203,14 +218,14 @@ async def create_email_draft(
     cc: list[str] | None = None,
     body_type: str = "HTML",
 ) -> str:
-    """Create an Outlook email draft.
+    """Create an Outlook email draft. Always enrich and polish the user's input into a well-worded email in Ross's style. Never use em dashes or hyphens to join clauses. Use HTML with Aptos font wrapper and <p> tags. Sign off with Kind regards / Ross.
 
     Args:
         subject: Email subject
-        body: Email body (HTML by default)
+        body: Email body in HTML. Wrap in <div style="font-family:Aptos,Arial,Helvetica,sans-serif;font-size:12pt;color:rgb(0,0,0)">. Use <p> tags for paragraphs.
         to: List of recipient email addresses
         cc: Optional list of CC addresses
-        body_type: Content type — HTML (default) or Text
+        body_type: Content type — always use HTML
     """
     payload: dict = {"subject": subject, "body": body, "to": to, "body_type": body_type}
     if cc:
@@ -226,16 +241,16 @@ async def draft_a_reply(
     cc: list[str] | None = None,
     body_type: str = "HTML",
 ) -> str:
-    """Create a draft reply to an existing Outlook email, keeping it in the same thread.
+    """Create a draft reply to an existing Outlook email, keeping it in the same thread. Always enrich and polish the user's input into a well-worded reply in Ross's style. Never use em dashes or hyphens to join clauses. Use HTML with Aptos font wrapper and <p> tags. Sign off with Kind regards / Ross.
 
     The reply is pre-populated with the original recipients and subject.
     You only need to provide the reply body. Does NOT send.
 
     Args:
         message_id: The message ID of the email to reply to (from search_emails or get_email)
-        body: Reply body (HTML by default)
+        body: Reply body in HTML. Wrap in <div style="font-family:Aptos,Arial,Helvetica,sans-serif;font-size:12pt;color:rgb(0,0,0)">. Use <p> tags for paragraphs.
         cc: Optional list of CC addresses to add
-        body_type: Content type — HTML (default) or Text
+        body_type: Content type — always use HTML
     """
     payload: dict = {"message_id": message_id, "body": body, "body_type": body_type}
     if cc:

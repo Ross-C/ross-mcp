@@ -28,8 +28,9 @@ When adding a new tool, update ALL of these:
 
 ## Email Drafting Style
 
-When generating email drafts via Outlook:
+When generating ANY email draft via Outlook (create_draft, draft_reply, or "email someone"):
 
+- **Always enrich and polish** what Ross asks for. Never parrot his words back verbatim. Take the intent and key points, then write a well-worded, natural email that sounds like Ross wrote it carefully. Add appropriate context, smooth transitions, and proper phrasing.
 - Greeting: "Hi [Name]" for one person, "Hi [Name]/[Name]" for two, "Hi all" for 3+
 - Tone: conversational and direct, not corporate or formal
 - Never use em dashes (—) or hyphens to join clauses. Use commas or full stops. Dashes look AI-generated.
