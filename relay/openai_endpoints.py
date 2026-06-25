@@ -5,11 +5,22 @@ giving ChatGPT complete parameter visibility via the OpenAPI spec.
 """
 
 import os
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, BeforeValidator, Field
+
+
+def _coerce_to_list(v: Any) -> list[str]:
+    """Accept a comma-separated string or a list for email address fields."""
+    if isinstance(v, str):
+        return [addr.strip() for addr in v.split(",") if addr.strip()]
+    return v
+
+
+EmailList = Annotated[list[str], BeforeValidator(_coerce_to_list)]
+OptionalEmailList = Annotated[list[str] | None, BeforeValidator(lambda v: _coerce_to_list(v) if isinstance(v, str) else v)]
 
 router = APIRouter(prefix="/api/tools", tags=["Tools"])
 _security = HTTPBearer()
@@ -133,8 +144,8 @@ async def get_email_thread(req: GetThreadRequest, _=Depends(_get_api_key)):
 class CreateDraftRequest(BaseModel):
     subject: str = Field(description="Email subject")
     body: str = Field(description="Email body in HTML. Wrap in Aptos font div. Use <p> tags for paragraphs. Always enrich and polish the user's input, never parrot verbatim. No em dashes or hyphens joining clauses. Sign off Kind regards / Ross.")
-    to: list[str] = Field(description="Recipient email addresses")
-    cc: list[str] | None = Field(default=None, description="CC addresses")
+    to: EmailList = Field(description="Recipient email addresses (list or comma-separated string)")
+    cc: OptionalEmailList = Field(default=None, description="CC addresses")
     body_type: str = Field(default="HTML", description="Always use HTML")
 
 
@@ -148,7 +159,7 @@ async def create_draft(req: CreateDraftRequest, _=Depends(_get_api_key)):
 class DraftReplyRequest(BaseModel):
     message_id: str = Field(description="Message ID of the email to reply to")
     body: str = Field(description="Reply body in HTML. Wrap in Aptos font div. Use <p> tags for paragraphs. Always enrich and polish the user's input, never parrot verbatim. No em dashes or hyphens joining clauses. Sign off Kind regards / Ross.")
-    cc: list[str] | None = Field(default=None, description="CC addresses to add")
+    cc: OptionalEmailList = Field(default=None, description="CC addresses to add")
     body_type: str = Field(default="HTML", description="Always use HTML")
 
 
@@ -163,8 +174,8 @@ class UpdateDraftRequest(BaseModel):
     message_id: str = Field(description="Draft message ID")
     subject: str | None = Field(default=None, description="New subject")
     body: str | None = Field(default=None, description="New body")
-    to: list[str] | None = Field(default=None, description="New recipients")
-    cc: list[str] | None = Field(default=None, description="New CC list")
+    to: OptionalEmailList = Field(default=None, description="New recipients")
+    cc: OptionalEmailList = Field(default=None, description="New CC list")
     body_type: str = Field(default="HTML", description="HTML or Text")
 
 
@@ -190,8 +201,8 @@ async def send_draft(req: SendDraftRequest, _=Depends(_get_api_key)):
 class SendEmailRequest(BaseModel):
     subject: str = Field(description="Email subject")
     body: str = Field(description="Email body (HTML by default)")
-    to: list[str] = Field(description="Recipient email addresses")
-    cc: list[str] | None = Field(default=None, description="CC addresses")
+    to: EmailList = Field(description="Recipient email addresses (list or comma-separated string)")
+    cc: OptionalEmailList = Field(default=None, description="CC addresses")
     body_type: str = Field(default="HTML", description="HTML or Text")
 
 
@@ -205,9 +216,9 @@ async def send_email(req: SendEmailRequest, _=Depends(_get_api_key)):
 class ScheduleEmailRequest(BaseModel):
     subject: str = Field(description="Email subject")
     body: str = Field(description="Email body (HTML by default)")
-    to: list[str] = Field(description="Recipient email addresses")
+    to: EmailList = Field(description="Recipient email addresses (list or comma-separated string)")
     send_at: str = Field(description="When to send in ISO format, e.g. 2026-06-25T09:00:00")
-    cc: list[str] | None = Field(default=None, description="CC addresses")
+    cc: OptionalEmailList = Field(default=None, description="CC addresses")
     body_type: str = Field(default="HTML", description="HTML or Text")
 
 

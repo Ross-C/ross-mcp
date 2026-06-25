@@ -10,7 +10,8 @@ from datetime import datetime, timezone
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Depends, Request
-from fastapi.responses import HTMLResponse
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 
@@ -52,6 +53,28 @@ app = FastAPI(
     servers=[{"url": "https://ross-mcp-relay.fly.dev"}],
 )
 security = HTTPBearer()
+
+
+# --- Error handlers (return clean errors for ElevenLabs/ChatGPT) ---
+
+@app.exception_handler(RequestValidationError)
+async def validation_error_handler(request: Request, exc: RequestValidationError):
+    errors = exc.errors()
+    details = "; ".join(f"{e.get('loc', ['?'])[-1]}: {e.get('msg', 'invalid')}" for e in errors)
+    return JSONResponse(
+        status_code=200,
+        content={"error": f"Invalid request: {details}"},
+    )
+
+
+@app.exception_handler(HTTPException)
+async def http_error_handler(request: Request, exc: HTTPException):
+    if exc.status_code in (401, 403):
+        return JSONResponse(status_code=exc.status_code, content={"error": exc.detail})
+    return JSONResponse(
+        status_code=200,
+        content={"error": f"Error ({exc.status_code}): {exc.detail}"},
+    )
 
 
 # --- Agent Registry ---
