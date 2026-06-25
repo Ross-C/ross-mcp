@@ -543,6 +543,51 @@ async def convert_md_to_docx(req: ConvertMdToDocxRequest, _=Depends(_get_api_key
 
 
 # =====================
+# Small Talk
+# =====================
+
+WMO_WEATHER = {
+    0: "clear skies", 1: "mainly clear", 2: "partly cloudy", 3: "overcast",
+    45: "foggy", 48: "icy fog", 51: "light drizzle", 53: "drizzle", 55: "heavy drizzle",
+    61: "light rain", 63: "rain", 65: "heavy rain", 71: "light snow", 73: "snow",
+    75: "heavy snow", 80: "light showers", 81: "showers", 82: "heavy showers",
+    95: "thunderstorms", 96: "thunderstorms with hail", 99: "heavy thunderstorms with hail",
+}
+
+
+@router.post("/local-weather", summary="Get current weather for Ross's area (BL8, Bury). Only use occasionally for natural small talk.")
+async def local_weather(_=Depends(_get_api_key)):
+    from relay.dashboard import get_setting
+    if get_setting("small_talk", "true") != "true":
+        return {"weather": None, "message": "Small talk is currently disabled"}
+    import httpx
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(
+                "https://api.open-meteo.com/v1/forecast",
+                params={
+                    "latitude": 53.59, "longitude": -2.30,
+                    "current": "temperature_2m,weather_code,wind_speed_10m",
+                    "timezone": "Europe/London",
+                },
+            )
+            data = resp.json().get("current", {})
+            temp = data.get("temperature_2m")
+            code = data.get("weather_code", 0)
+            wind = data.get("wind_speed_10m")
+            conditions = WMO_WEATHER.get(code, "unknown")
+            return {
+                "temperature_c": temp,
+                "conditions": conditions,
+                "wind_kmh": wind,
+                "location": "Bury, Greater Manchester",
+                "summary": f"{conditions}, {temp}°C, wind {wind} km/h",
+            }
+    except Exception as e:
+        return {"error": str(e)}
+
+
+# =====================
 # Contacts
 # =====================
 

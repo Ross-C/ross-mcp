@@ -74,6 +74,11 @@ def _init_db():
             reprocessed_at TEXT
         )""")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_failed_ts ON failed_requests(timestamp)")
+        conn.execute("""CREATE TABLE IF NOT EXISTS settings (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        )""")
+        conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('small_talk', 'true')")
         conn.execute("""CREATE TABLE IF NOT EXISTS contacts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
@@ -106,6 +111,23 @@ def record_update(source: str, summary: str, version: str | None = None):
                 "INSERT INTO updates (timestamp, source, version, summary) VALUES (?, ?, ?, ?)",
                 (ts, source, version, summary),
             )
+    except Exception:
+        pass
+
+
+def get_setting(key: str, default: str = "") -> str:
+    try:
+        with _get_db() as conn:
+            row = conn.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
+            return row["value"] if row else default
+    except Exception:
+        return default
+
+
+def set_setting(key: str, value: str):
+    try:
+        with _get_db() as conn:
+            conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, value))
     except Exception:
         pass
 
@@ -357,6 +379,23 @@ async def dashboard_stats(request: Request):
             "current_task": task,
         }
     return {"agents": agent_data, "stats": get_stats()}
+
+
+@router.get("/api/dashboard/settings")
+async def get_settings(request: Request):
+    if not _verify_session(request):
+        return Response(status_code=401)
+    return {"small_talk": get_setting("small_talk", "true") == "true"}
+
+
+@router.post("/api/dashboard/settings")
+async def update_settings(request: Request):
+    if not _verify_session(request):
+        return Response(status_code=401)
+    data = await request.json()
+    for key, value in data.items():
+        set_setting(key, str(value).lower())
+    return {"status": "updated"}
 
 
 @router.get("/api/dashboard/contacts")
@@ -636,6 +675,16 @@ DASHBOARD_HTML = """<!DOCTYPE html>
 
         <!-- Contacts Tab -->
         <div id="tab-contacts" class="hidden">
+            <div class="bg-white border border-gray-200 rounded-xl p-5 mb-4">
+                <h3 class="text-sm font-semibold text-gray-700 mb-3">Sophie Settings</h3>
+                <div class="flex items-center gap-3">
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="toggle-small-talk" onchange="toggleSmallTalk()" class="sr-only peer">
+                        <div class="w-9 h-5 bg-gray-200 rounded-full peer peer-checked:bg-blue-600 after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full"></div>
+                    </label>
+                    <span class="text-sm text-gray-600">Small talk (weather, casual comments)</span>
+                </div>
+            </div>
             <div class="bg-white border border-gray-200 rounded-xl p-5 mb-4">
                 <h3 class="text-sm font-semibold text-gray-700 mb-4">Add Contact</h3>
                 <form onsubmit="addContact(event)" class="flex flex-wrap gap-3 items-end">
@@ -1173,6 +1222,27 @@ DASHBOARD_HTML = """<!DOCTYPE html>
     }
 
     fetchContacts();
+
+    // --- Settings ---
+    async function fetchSettings() {
+        try {
+            const resp = await fetch('/api/dashboard/settings');
+            if (resp.status === 401) return;
+            const data = await resp.json();
+            document.getElementById('toggle-small-talk').checked = data.small_talk;
+        } catch(e) {}
+    }
+
+    async function toggleSmallTalk() {
+        const enabled = document.getElementById('toggle-small-talk').checked;
+        await fetch('/api/dashboard/settings', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({small_talk: enabled}),
+        });
+    }
+
+    fetchSettings();
 
     function updateCharts() {
         if (!dashData) return;
