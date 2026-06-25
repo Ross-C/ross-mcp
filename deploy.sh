@@ -26,7 +26,9 @@ git push 2>&1 || echo "Push failed or nothing to push"
 echo ""
 echo "--- Deploy Relay ---"
 if command -v fly &>/dev/null; then
-    fly deploy --app ross-mcp-relay
+    GIT_VER=$(git rev-parse --short HEAD)
+    GIT_MSG=$(git log -1 --pretty=%s)
+    fly deploy --app ross-mcp-relay --build-arg "GIT_VERSION=$GIT_VER" --build-arg "GIT_MESSAGE=$GIT_MSG"
 else
     echo "fly CLI not found — skipping relay deploy."
     echo "Install: curl -L https://fly.io/install.sh | sh"

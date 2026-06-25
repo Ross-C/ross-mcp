@@ -55,6 +55,14 @@ def _init_db():
             token TEXT PRIMARY KEY,
             created_at TEXT NOT NULL
         )""")
+        conn.execute("""CREATE TABLE IF NOT EXISTS updates (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TEXT NOT NULL,
+            source TEXT NOT NULL,
+            version TEXT,
+            summary TEXT NOT NULL
+        )""")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_updates_ts ON updates(timestamp)")
         conn.commit()
         conn.close()
 
@@ -69,6 +77,19 @@ def _get_db():
             conn.commit()
         finally:
             conn.close()
+
+
+def record_update(source: str, summary: str, version: str | None = None):
+    """Record a system update (deploy, agent update, config change)."""
+    ts = datetime.now(timezone.utc).isoformat()
+    try:
+        with _get_db() as conn:
+            conn.execute(
+                "INSERT INTO updates (timestamp, source, version, summary) VALUES (?, ?, ?, ?)",
+                (ts, source, version, summary),
+            )
+    except Exception:
+        pass
 
 
 def record_command(command_type: str, agent_name: str, status: str, error: str | None = None):
@@ -124,6 +145,12 @@ def get_stats() -> dict:
             ):
                 by_agent[row["agent"]] = row["cnt"]
 
+            updates = []
+            for row in conn.execute(
+                "SELECT timestamp, source, version, summary FROM updates ORDER BY id DESC LIMIT 100"
+            ):
+                updates.append(dict(row))
+
             return {
                 "total": total,
                 "by_type": by_type,
@@ -131,6 +158,7 @@ def get_stats() -> dict:
                 "by_agent": by_agent,
                 "recent": recent,
                 "recent_errors": recent_errors,
+                "updates": updates,
             }
     except Exception as e:
         import traceback
@@ -300,6 +328,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
                     <button onclick="showTab('agents')" data-tab="agents" class="tab-inactive px-3 py-4 text-sm font-medium transition-colors">Agents</button>
                     <button onclick="showTab('activity')" data-tab="activity" class="tab-inactive px-3 py-4 text-sm font-medium transition-colors">Activity</button>
                     <button onclick="showTab('errors')" data-tab="errors" class="tab-inactive px-3 py-4 text-sm font-medium transition-colors">Errors</button>
+                    <button onclick="showTab('updates')" data-tab="updates" class="tab-inactive px-3 py-4 text-sm font-medium transition-colors">Updates</button>
                     <button onclick="showTab('setup')" data-tab="setup" class="tab-inactive px-3 py-4 text-sm font-medium transition-colors">Setup</button>
                 </div>
             </div>
@@ -414,6 +443,18 @@ DASHBOARD_HTML = """<!DOCTYPE html>
             </div>
         </div>
 
+        <!-- Updates Tab -->
+        <div id="tab-updates" class="hidden">
+            <div class="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                <div class="px-4 py-3 border-b border-gray-100">
+                    <span class="text-sm font-semibold text-gray-700">System Updates</span>
+                    <span class="text-gray-400 text-xs ml-2" id="updates-count"></span>
+                </div>
+                <div id="updates-list" class="divide-y divide-gray-50"></div>
+                <div id="no-updates" class="hidden px-4 py-8 text-center text-gray-400 text-sm">No updates recorded yet</div>
+            </div>
+        </div>
+
         <!-- Setup Tab -->
         <div id="tab-setup" class="hidden">
             <div class="space-y-4 max-w-3xl">
@@ -477,7 +518,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
     let categoryChart = null;
 
     const TOOL_CATEGORIES = {
-        'Email': ['search_emails', 'get_email', 'get_thread', 'create_draft', 'update_draft', 'send_draft', 'send_email', 'schedule_send', 'cancel_scheduled_send', 'archive_email', 'add_attachment'],
+        'Email': ['search_emails', 'get_email', 'get_thread', 'create_draft', 'draft_reply', 'update_draft', 'send_draft', 'send_email', 'schedule_send', 'cancel_scheduled_send', 'archive_email', 'add_attachment'],
         'Gmail': ['gmail_search', 'gmail_get_email', 'gmail_get_thread', 'gmail_create_draft', 'gmail_archive', 'gmail_list_labels'],
         'Calendar': ['list_events', 'create_event', 'update_event', 'cancel_event', 'find_available_slots'],
         'Reminders': ['create_reminder', 'list_reminders', 'complete_reminder'],
@@ -500,6 +541,40 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         'System': '#cbd5e1',
     };
 
+    const TOOL_LABELS = {
+        'search_emails': 'Search emails',
+        'get_email': 'Read email',
+        'get_thread': 'Read thread',
+        'create_draft': 'Create draft',
+        'draft_reply': 'Draft reply',
+        'update_draft': 'Update draft',
+        'send_draft': 'Send draft',
+        'send_email': 'Send email',
+        'schedule_send': 'Schedule email',
+        'cancel_scheduled_send': 'Cancel scheduled',
+        'archive_email': 'Archive email',
+        'add_attachment': 'Add attachment',
+        'list_events': 'List events',
+        'create_event': 'Create event',
+        'update_event': 'Update event',
+        'cancel_event': 'Cancel event',
+        'find_available_slots': 'Find free slots',
+        'create_reminder': 'Create reminder',
+        'list_reminders': 'List reminders',
+        'complete_reminder': 'Complete reminder',
+        'search_notes': 'Search notes',
+        'get_note': 'Read note',
+        'create_note': 'Create note',
+        'list_note_folders': 'List folders',
+        'list_recordings': 'List recordings',
+        'transcribe_recording': 'Transcribe',
+        'convert_md_to_pdf': 'MD to PDF',
+        'convert_md_to_docx': 'MD to DOCX',
+        'update_agent': 'Update agent',
+        'agent_status': 'Agent status',
+        'ping': 'Ping',
+    };
+
     function showTab(name) {
         document.querySelectorAll('[id^="tab-"]').forEach(el => el.classList.add('hidden'));
         document.getElementById('tab-' + name).classList.remove('hidden');
@@ -520,6 +595,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
             renderAgents();
             renderActivity();
             renderErrors();
+            renderUpdates();
             updateCharts();
         } catch (e) {
             console.error('Fetch failed:', e);
@@ -572,45 +648,6 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         document.getElementById('stat-errors').textContent = errorCount;
 
         // Render granular tool breakdown grouped by category
-        const TOOL_LABELS = {
-            'search_emails': 'Search emails',
-            'get_email': 'Read email',
-            'get_thread': 'Read thread',
-            'create_draft': 'Create draft',
-            'update_draft': 'Update draft',
-            'send_draft': 'Send draft',
-            'send_email': 'Send email',
-            'schedule_send': 'Schedule email',
-            'cancel_scheduled_send': 'Cancel scheduled',
-            'archive_email': 'Archive email',
-            'add_attachment': 'Add attachment',
-            'list_events': 'List events',
-            'create_event': 'Create event',
-            'update_event': 'Update event',
-            'cancel_event': 'Cancel event',
-            'find_available_slots': 'Find free slots',
-            'create_reminder': 'Create reminder',
-            'list_reminders': 'List reminders',
-            'complete_reminder': 'Complete reminder',
-            'search_notes': 'Search notes',
-            'get_note': 'Read note',
-            'create_note': 'Create note',
-            'list_note_folders': 'List folders',
-            'list_recordings': 'List recordings',
-            'transcribe_recording': 'Transcribe',
-            'convert_md_to_pdf': 'MD to PDF',
-            'convert_md_to_docx': 'MD to DOCX',
-            'gmail_search': 'Search Gmail',
-            'gmail_get_email': 'Read Gmail',
-            'gmail_get_thread': 'Gmail thread',
-            'gmail_create_draft': 'Gmail draft',
-            'gmail_archive': 'Archive Gmail',
-            'gmail_list_labels': 'Gmail labels',
-            'update_agent': 'Update agent',
-            'agent_status': 'Agent status',
-            'ping': 'Ping',
-        };
-
         let html = '';
         for (const [cat, tools] of Object.entries(TOOL_CATEGORIES)) {
             const catTools = tools.filter(t => bt[t]);
@@ -842,6 +879,43 @@ DASHBOARD_HTML = """<!DOCTYPE html>
                 }
             }
         });
+    }
+
+    function renderUpdates() {
+        if (!dashData) return;
+        const updates = dashData.stats.updates || [];
+        const el = document.getElementById('updates-list');
+        const noUpdates = document.getElementById('no-updates');
+        document.getElementById('updates-count').textContent = updates.length + ' entries';
+        if (updates.length === 0) {
+            noUpdates.classList.remove('hidden');
+            el.innerHTML = '';
+            return;
+        }
+        noUpdates.classList.add('hidden');
+
+        const SOURCE_ICONS = {
+            'relay': '&#9881;',
+            'macbook-pro': '&#9899;',
+            'mac-mini': '&#9899;',
+        };
+
+        el.innerHTML = updates.map(u => {
+            const time = new Date(u.timestamp).toLocaleString();
+            const icon = SOURCE_ICONS[u.source] || '&#8226;';
+            const ver = u.version ? `<span class="text-gray-400 font-mono text-xs ml-2">${u.version}</span>` : '';
+            return `<div class="px-4 py-3 hover:bg-gray-50 flex items-start gap-3">
+                <span class="text-gray-400 mt-0.5">${icon}</span>
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2">
+                        <span class="text-sm font-medium text-gray-700">${u.source}</span>
+                        ${ver}
+                        <span class="text-xs text-gray-400 ml-auto whitespace-nowrap">${time}</span>
+                    </div>
+                    <p class="text-sm text-gray-500 mt-0.5">${u.summary}</p>
+                </div>
+            </div>`;
+        }).join('');
     }
 
     fetchData();

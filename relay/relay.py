@@ -29,6 +29,12 @@ from contextlib import asynccontextmanager
 
 @asynccontextmanager
 async def lifespan(app):
+    # Record relay startup
+    from relay.dashboard import record_update
+    ver = os.getenv("GIT_VERSION", "")
+    msg = os.getenv("GIT_MESSAGE", "")
+    record_update("relay", f"Relay deployed: {msg}" if msg else "Relay deployed and started", version=ver or None)
+
     # Start the MCP session manager (sub-app lifespans don't auto-run)
     from relay.mcp_endpoint import get_session_manager
     sm = get_session_manager()
@@ -135,6 +141,10 @@ async def agent_websocket(ws: WebSocket):
     agents[agent_id] = ConnectedAgent(ws, registration)
     logger.info(f"Agent connected: {agent_id} ({registration.machine_name})")
 
+    from relay.dashboard import record_update
+    ver = getattr(registration, 'version', None) or 'unknown'
+    record_update(agent_id, f"Agent connected ({registration.machine_name})", version=ver)
+
     try:
         async for message in ws.iter_text():
             # Agent sends responses to commands
@@ -204,13 +214,18 @@ async def execute_command(command_type: CommandType, payload: dict) -> dict:
             command_log.pop(0)
 
         # Record stats for dashboard
-        from relay.dashboard import record_command
+        from relay.dashboard import record_command, record_update
         record_command(
             command_type=command_type.value,
             agent_name=agent_id,
             status=response.status.value,
             error=response.error,
         )
+
+        # Log agent self-updates
+        if command_type == CommandType.UPDATE_AGENT and response.status.value == "success":
+            git_msg = response.data.get("git", "")
+            record_update(agent_id, f"Agent self-updated: {git_msg}")
 
         return response.model_dump()
 
