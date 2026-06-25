@@ -56,8 +56,6 @@ from shared.messages import (
     GmailGetThreadPayload,
     GmailCreateDraftPayload,
     GmailArchivePayload,
-    GcalListEventsPayload,
-    GcalCreateEventPayload,
     UpdateAgentPayload,
 )
 from agent.services.reminders import RemindersService
@@ -66,7 +64,6 @@ from agent.services.outlook_mail import OutlookMailService
 from agent.services.outlook_calendar import OutlookCalendarService
 from agent.services.google_auth import GoogleAuth
 from agent.services.gmail import GmailService
-from agent.services.google_calendar import GoogleCalendarService
 from agent.services.notes import NotesService
 from agent.services.voice_memos import VoiceMemosService
 from agent.services.documents import DocumentService
@@ -87,7 +84,6 @@ class Agent:
         self.calendar = OutlookCalendarService(self.outlook_auth)
         self.google_auth = GoogleAuth()
         self.gmail = GmailService(self.google_auth)
-        self.gcal = GoogleCalendarService(self.google_auth)
         self.notes = NotesService()
         self.voice_memos = VoiceMemosService()
         self.documents = DocumentService()
@@ -139,8 +135,6 @@ class Agent:
                             CommandType.GMAIL_CREATE_DRAFT,
                             CommandType.GMAIL_ARCHIVE,
                             CommandType.GMAIL_LIST_LABELS,
-                            CommandType.GCAL_LIST_EVENTS,
-                            CommandType.GCAL_CREATE_EVENT,
                         ])
                     if self.outlook_auth.is_authenticated:
                         capabilities.extend([
@@ -290,16 +284,6 @@ class Agent:
                     result = await self.gmail.archive_email(message_id=p.message_id)
                 case CommandType.GMAIL_LIST_LABELS:
                     result = await self.gmail.list_labels()
-                # --- Google Calendar ---
-                case CommandType.GCAL_LIST_EVENTS:
-                    p = GcalListEventsPayload(**cmd.payload)
-                    result = await self.gcal.list_events(start=p.start, end=p.end, top=p.top)
-                case CommandType.GCAL_CREATE_EVENT:
-                    p = GcalCreateEventPayload(**cmd.payload)
-                    result = await self.gcal.create_event(
-                        subject=p.subject, start=p.start, end=p.end, location=p.location,
-                        body=p.body, attendees=p.attendees, is_all_day=p.is_all_day, timezone_name=p.timezone_name,
-                    )
                 # --- Documents ---
                 case CommandType.CONVERT_MD_TO_PDF:
                     p = ConvertDocumentPayload(**cmd.payload)

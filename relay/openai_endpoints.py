@@ -335,11 +335,6 @@ async def add_attachment(req: AddAttachmentRequest, _=Depends(_get_api_key)):
 # =====================
 # Uncomment when GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are set in .env
 
-# =====================
-# Google Calendar (disabled until Google OAuth is configured)
-# =====================
-# Uncomment when GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are set in .env
-
 
 # =====================
 # Voice Memos

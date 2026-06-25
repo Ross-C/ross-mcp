@@ -51,8 +51,8 @@ All dates and times use Europe/London. Never use UTC unless explicitly asked.
 
 ## Default Services
 
-- "email" / "calendar" = Outlook (Office 365)
-- "Gmail" / "Google Calendar" = Google (explicitly named)
+- "email" / "calendar" = Outlook (Office 365) — this is the ONLY calendar. Never use Apple Calendar or Google Calendar.
+- "Gmail" = Google (explicitly named, email only)
 
 ## Meeting Transcription
 

@@ -58,7 +58,7 @@ RELAY_HOST = os.getenv("RELAY_PUBLIC_HOST", "ross-mcp-relay.fly.dev")
 
 mcp = FastMCP(
     "Ross Life Admin",
-    instructions="Manage Apple Reminders, Outlook Email & Calendar, Gmail & Google Calendar via local Mac agents",
+    instructions="Manage Apple Reminders, Outlook Email & Calendar via local Mac agents",
     stateless_http=True,
     transport_security=TransportSecuritySettings(
         enable_dns_rebinding_protection=True,
@@ -551,24 +551,6 @@ async def add_email_attachment(
 #     result = await _send("gmail_list_labels")
 #     return json.dumps(result, indent=2)
 
-# @mcp.tool()
-# async def gcal_list_events(start: str | None = None, end: str | None = None, top: int = 20) -> str:
-#     """List Google Calendar events. Defaults to next 7 days if no range given."""
-#     payload: dict = {"top": top}
-#     if start: payload["start"] = start
-#     if end: payload["end"] = end
-#     result = await _send("gcal_list_events", payload)
-#     return json.dumps(result, indent=2)
-
-# @mcp.tool()
-# async def gcal_create_event(subject: str, start: str, end: str, location: str | None = None, body: str | None = None, attendees: list[str] | None = None, is_all_day: bool = False, timezone_name: str = "Europe/London") -> str:
-#     """Create a Google Calendar event."""
-#     payload: dict = {"subject": subject, "start": start, "end": end, "timezone_name": timezone_name, "is_all_day": is_all_day}
-#     if location: payload["location"] = location
-#     if body: payload["body"] = body
-#     if attendees: payload["attendees"] = attendees
-#     result = await _send("gcal_create_event", payload)
-#     return json.dumps(result, indent=2)
 
 
 # --- Document Tools ---

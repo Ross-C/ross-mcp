@@ -49,9 +49,6 @@ class CommandType(str, Enum):
     GMAIL_CREATE_DRAFT = "gmail_create_draft"
     GMAIL_ARCHIVE = "gmail_archive"
     GMAIL_LIST_LABELS = "gmail_list_labels"
-    # Google Calendar
-    GCAL_LIST_EVENTS = "gcal_list_events"
-    GCAL_CREATE_EVENT = "gcal_create_event"
     # System
     UPDATE_AGENT = "update_agent"
     AGENT_STATUS = "agent_status"
@@ -270,24 +267,6 @@ class GmailCreateDraftPayload(BaseModel):
 class GmailArchivePayload(BaseModel):
     message_id: str
 
-
-# --- Google Calendar Payloads ---
-
-class GcalListEventsPayload(BaseModel):
-    start: datetime | None = None
-    end: datetime | None = None
-    top: int = 20
-
-
-class GcalCreateEventPayload(BaseModel):
-    subject: str
-    start: datetime
-    end: datetime
-    location: str | None = None
-    body: str | None = None
-    attendees: list[str] | None = None
-    is_all_day: bool = False
-    timezone_name: str = "Europe/London"
 
 
 class UpdateAgentPayload(BaseModel):
