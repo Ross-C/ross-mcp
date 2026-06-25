@@ -86,12 +86,13 @@ async def validation_error_handler(request: Request, exc: RequestValidationError
 
 @app.exception_handler(HTTPException)
 async def http_error_handler(request: Request, exc: HTTPException):
-    if exc.status_code in (401, 403):
-        return JSONResponse(status_code=exc.status_code, content={"error": exc.detail})
-    return JSONResponse(
-        status_code=200,
-        content={"error": f"Error ({exc.status_code}): {exc.detail}"},
-    )
+    # Only wrap errors as 200 for the ElevenLabs/ChatGPT tool endpoints
+    if request.url.path.startswith("/api/tools/") and exc.status_code not in (401, 403):
+        return JSONResponse(
+            status_code=200,
+            content={"error": f"Error ({exc.status_code}): {exc.detail}"},
+        )
+    return JSONResponse(status_code=exc.status_code, content={"error": exc.detail})
 
 
 def _detect_source(request: Request) -> str:
