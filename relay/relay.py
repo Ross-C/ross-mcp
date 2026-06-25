@@ -36,6 +36,10 @@ async def lifespan(app):
     msg = os.getenv("GIT_MESSAGE", "")
     record_update("relay", f"Relay deployed: {msg}" if msg else "Relay deployed and started", version=ver or None)
 
+    # Start weather cache background task
+    from relay.openai_endpoints import start_weather_cache
+    asyncio.create_task(start_weather_cache())
+
     # Start the MCP session manager (sub-app lifespans don't auto-run)
     from relay.mcp_endpoint import get_session_manager
     sm = get_session_manager()

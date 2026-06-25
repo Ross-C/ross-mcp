@@ -1369,9 +1369,9 @@ DASHBOARD_HTML = """<!DOCTYPE html>
 
     // --- Settings ---
     const SMALL_TALK_DESCS = {
-        off: 'No weather or casual comments',
+        off: 'No casual comments',
         medium: 'Occasional touches, roughly one in three calls',
-        high: 'Every call — weather, time of day, day of week',
+        high: 'Every call — casual comments, time of day, day of week',
     };
 
     async function fetchSettings() {

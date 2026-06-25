@@ -585,6 +585,8 @@ async def cbs_list_tickets(
 ) -> str:
     """List CBS support tickets. Use when asked about CBS tickets, or when asked generically about "support tickets" (call both cbs_list_tickets and rcsc_list_tickets and summarise together).
 
+    Present a brief one-sentence summary for each ticket, then ask if the user wants more details on any specific ticket.
+
     Args:
         state: Ticket state filter: open, hold, closed, snoozed, archived (default: open)
         per_page: Max tickets to return (default 20)
@@ -610,6 +612,8 @@ async def rcsc_list_tickets(
     per_page: int = 20,
 ) -> str:
     """List RCSC support tickets. Use when asked about RCSC tickets, or when asked generically about "support tickets" (call both cbs_list_tickets and rcsc_list_tickets and summarise together).
+
+    Present a brief one-sentence summary for each ticket, then ask if the user wants more details on any specific ticket.
 
     Args:
         state: Ticket state filter: open, hold, closed, snoozed, archived (default: open)

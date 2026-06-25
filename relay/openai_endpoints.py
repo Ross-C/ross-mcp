@@ -407,7 +407,7 @@ class CBSListTicketsRequest(BaseModel):
     per_page: int = Field(default=20, description="Max tickets to return")
 
 
-@router.post("/cbs-list-tickets", summary="List CBS support tickets")
+@router.post("/cbs-list-tickets", summary="List CBS support tickets. Give a brief one-sentence summary per ticket, then ask if Ross wants more details on any.")
 async def cbs_list_tickets(req: CBSListTicketsRequest, _=Depends(_get_api_key)):
     return await _run("cbs_list_tickets", {"state": req.state, "per_page": req.per_page})
 
@@ -426,7 +426,7 @@ class RCSCListTicketsRequest(BaseModel):
     per_page: int = Field(default=20, description="Max tickets to return")
 
 
-@router.post("/rcsc-list-tickets", summary="List RCSC support tickets")
+@router.post("/rcsc-list-tickets", summary="List RCSC support tickets. Give a brief one-sentence summary per ticket, then ask if Ross wants more details on any.")
 async def rcsc_list_tickets(req: RCSCListTicketsRequest, _=Depends(_get_api_key)):
     return await _run("rcsc_list_tickets", {"state": req.state, "per_page": req.per_page})
 
@@ -554,13 +554,14 @@ WMO_WEATHER = {
     95: "thunderstorms", 96: "thunderstorms with hail", 99: "heavy thunderstorms with hail",
 }
 
+# --- Cached weather (refreshed every 15 minutes in background) ---
 
-@router.post("/local-weather", summary="Get current weather for Ross's area (BL8, Bury). Also returns the small talk level setting.")
-async def local_weather(_=Depends(_get_api_key)):
-    from relay.dashboard import get_setting
-    level = get_setting("small_talk", "medium")
-    if level == "false" or level == "off":
-        return {"weather": None, "small_talk_level": "off", "message": "Small talk is currently disabled"}
+_cached_weather: dict | None = None
+
+
+async def _fetch_weather():
+    """Fetch weather from Open-Meteo and update the cache."""
+    global _cached_weather
     import httpx
     try:
         async with httpx.AsyncClient(timeout=10) as client:
@@ -577,16 +578,35 @@ async def local_weather(_=Depends(_get_api_key)):
             code = data.get("weather_code", 0)
             wind = data.get("wind_speed_10m")
             conditions = WMO_WEATHER.get(code, "unknown")
-            return {
+            _cached_weather = {
                 "temperature_c": temp,
                 "conditions": conditions,
                 "wind_kmh": wind,
                 "location": "Bury, Greater Manchester",
                 "summary": f"{conditions}, {temp}°C, wind {wind} km/h",
-                "small_talk_level": level,
             }
-    except Exception as e:
-        return {"error": str(e)}
+    except Exception:
+        pass  # Keep previous cache if fetch fails
+
+
+async def start_weather_cache():
+    """Background task: fetch weather immediately, then every 15 minutes."""
+    import asyncio
+    await _fetch_weather()
+    while True:
+        await asyncio.sleep(900)
+        await _fetch_weather()
+
+
+@router.post("/local-weather", summary="Get current weather for Ross's area (cached, instant). Only use occasionally for casual small talk, not every call. Never say 'getting the weather' or 'let me check the weather'. If you mention it, keep it to a brief informal comment (e.g. 'lovely day out there' or 'bit miserable outside'). Do NOT sound like a weather report. If no data is available, just skip it entirely.")
+async def local_weather(_=Depends(_get_api_key)):
+    from relay.dashboard import get_setting
+    level = get_setting("small_talk", "medium")
+    if level == "false" or level == "off":
+        return {"weather": None, "small_talk_level": "off", "message": "Small talk is currently disabled"}
+    if _cached_weather:
+        return {**_cached_weather, "small_talk_level": level}
+    return {"weather": None, "small_talk_level": level, "message": "No weather data available, skip weather small talk entirely"}
 
 
 # =====================
