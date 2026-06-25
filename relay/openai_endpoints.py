@@ -317,6 +317,105 @@ async def add_attachment(req: AddAttachmentRequest, _=Depends(_get_api_key)):
 
 
 # =====================
+# Gmail
+# =====================
+
+class GmailSearchRequest(BaseModel):
+    query: str = Field(description="Gmail search query (same syntax as Gmail search box)")
+    max_results: int = Field(default=10, description="Max results")
+
+
+@router.post("/gmail-search", summary="Search Gmail emails")
+async def gmail_search(req: GmailSearchRequest, _=Depends(_get_api_key)):
+    return await _run("gmail_search", {"query": req.query, "max_results": req.max_results})
+
+
+class GmailGetEmailRequest(BaseModel):
+    message_id: str = Field(description="Gmail message ID from search results")
+
+
+@router.post("/gmail-get-email", summary="Get full Gmail email content by ID")
+async def gmail_get_email(req: GmailGetEmailRequest, _=Depends(_get_api_key)):
+    return await _run("gmail_get_email", {"message_id": req.message_id})
+
+
+class GmailGetThreadRequest(BaseModel):
+    thread_id: str = Field(description="Gmail thread ID")
+
+
+@router.post("/gmail-get-thread", summary="Get all emails in a Gmail thread")
+async def gmail_get_thread(req: GmailGetThreadRequest, _=Depends(_get_api_key)):
+    return await _run("gmail_get_thread", {"thread_id": req.thread_id})
+
+
+class GmailCreateDraftRequest(BaseModel):
+    subject: str = Field(description="Email subject")
+    body: str = Field(description="Email body (HTML by default)")
+    to: list[str] = Field(description="Recipient email addresses")
+    cc: list[str] | None = Field(default=None, description="CC addresses")
+    body_type: str = Field(default="html", description="html or plain")
+
+
+@router.post("/gmail-create-draft", summary="Create a Gmail draft (does NOT send)")
+async def gmail_create_draft(req: GmailCreateDraftRequest, _=Depends(_get_api_key)):
+    payload: dict = {"subject": req.subject, "body": req.body, "to": req.to, "body_type": req.body_type}
+    if req.cc: payload["cc"] = req.cc
+    return await _run("gmail_create_draft", payload)
+
+
+class GmailArchiveRequest(BaseModel):
+    message_id: str = Field(description="Gmail message ID to archive")
+
+
+@router.post("/gmail-archive", summary="Archive a Gmail email (remove from Inbox)")
+async def gmail_archive(req: GmailArchiveRequest, _=Depends(_get_api_key)):
+    return await _run("gmail_archive", {"message_id": req.message_id})
+
+
+@router.post("/gmail-list-labels", summary="List all Gmail labels")
+async def gmail_list_labels(_=Depends(_get_api_key)):
+    return await _run("gmail_list_labels")
+
+
+# =====================
+# Google Calendar
+# =====================
+
+class GcalListEventsRequest(BaseModel):
+    start: str | None = Field(default=None, description="Start date in ISO format (defaults to now)")
+    end: str | None = Field(default=None, description="End date in ISO format (defaults to 7 days from start)")
+    top: int = Field(default=20, description="Max events to return")
+
+
+@router.post("/gcal-list-events", summary="List Google Calendar events")
+async def gcal_list_events(req: GcalListEventsRequest, _=Depends(_get_api_key)):
+    payload: dict = {"top": req.top}
+    if req.start: payload["start"] = req.start
+    if req.end: payload["end"] = req.end
+    return await _run("gcal_list_events", payload)
+
+
+class GcalCreateEventRequest(BaseModel):
+    subject: str = Field(description="Event title")
+    start: str = Field(description="Start time in ISO format")
+    end: str = Field(description="End time in ISO format")
+    location: str | None = Field(default=None, description="Location")
+    body: str | None = Field(default=None, description="Description")
+    attendees: list[str] | None = Field(default=None, description="Attendee email addresses")
+    is_all_day: bool = Field(default=False, description="All-day event")
+    timezone_name: str = Field(default="Europe/London", description="Timezone")
+
+
+@router.post("/gcal-create-event", summary="Create a Google Calendar event")
+async def gcal_create_event(req: GcalCreateEventRequest, _=Depends(_get_api_key)):
+    payload: dict = {"subject": req.subject, "start": req.start, "end": req.end, "timezone_name": req.timezone_name, "is_all_day": req.is_all_day}
+    if req.location: payload["location"] = req.location
+    if req.body: payload["body"] = req.body
+    if req.attendees: payload["attendees"] = req.attendees
+    return await _run("gcal_create_event", payload)
+
+
+# =====================
 # Voice Memos
 # =====================
 

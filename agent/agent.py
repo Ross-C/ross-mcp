@@ -50,12 +50,22 @@ from shared.messages import (
     GetNotePayload,
     CreateNotePayload,
     ListNoteFoldersPayload,
+    GmailSearchPayload,
+    GmailGetEmailPayload,
+    GmailGetThreadPayload,
+    GmailCreateDraftPayload,
+    GmailArchivePayload,
+    GcalListEventsPayload,
+    GcalCreateEventPayload,
     UpdateAgentPayload,
 )
 from agent.services.reminders import RemindersService
 from agent.services.outlook_auth import OutlookAuth
 from agent.services.outlook_mail import OutlookMailService
 from agent.services.outlook_calendar import OutlookCalendarService
+from agent.services.google_auth import GoogleAuth
+from agent.services.gmail import GmailService
+from agent.services.google_calendar import GoogleCalendarService
 from agent.services.notes import NotesService
 from agent.services.voice_memos import VoiceMemosService
 from agent.services.documents import DocumentService
@@ -74,6 +84,9 @@ class Agent:
         self.outlook_auth = OutlookAuth()
         self.mail = OutlookMailService(self.outlook_auth)
         self.calendar = OutlookCalendarService(self.outlook_auth)
+        self.google_auth = GoogleAuth()
+        self.gmail = GmailService(self.google_auth)
+        self.gcal = GoogleCalendarService(self.google_auth)
         self.notes = NotesService()
         self.voice_memos = VoiceMemosService()
         self.documents = DocumentService()
@@ -117,6 +130,17 @@ class Agent:
                         CommandType.UPDATE_AGENT,
                     CommandType.PING,
                     ]
+                    if self.google_auth.is_authenticated:
+                        capabilities.extend([
+                            CommandType.GMAIL_SEARCH,
+                            CommandType.GMAIL_GET_EMAIL,
+                            CommandType.GMAIL_GET_THREAD,
+                            CommandType.GMAIL_CREATE_DRAFT,
+                            CommandType.GMAIL_ARCHIVE,
+                            CommandType.GMAIL_LIST_LABELS,
+                            CommandType.GCAL_LIST_EVENTS,
+                            CommandType.GCAL_CREATE_EVENT,
+                        ])
                     if self.outlook_auth.is_authenticated:
                         capabilities.extend([
                             CommandType.SEARCH_EMAILS,
@@ -243,6 +267,34 @@ class Agent:
                 case CommandType.FIND_AVAILABLE_SLOTS:
                     p = FindAvailableSlotsPayload(**cmd.payload)
                     result = await self.calendar.find_available_slots(start=p.start, end=p.end, duration_minutes=p.duration_minutes)
+                # --- Gmail ---
+                case CommandType.GMAIL_SEARCH:
+                    p = GmailSearchPayload(**cmd.payload)
+                    result = await self.gmail.search_emails(query=p.query, max_results=p.max_results)
+                case CommandType.GMAIL_GET_EMAIL:
+                    p = GmailGetEmailPayload(**cmd.payload)
+                    result = await self.gmail.get_email(message_id=p.message_id)
+                case CommandType.GMAIL_GET_THREAD:
+                    p = GmailGetThreadPayload(**cmd.payload)
+                    result = await self.gmail.get_thread(thread_id=p.thread_id)
+                case CommandType.GMAIL_CREATE_DRAFT:
+                    p = GmailCreateDraftPayload(**cmd.payload)
+                    result = await self.gmail.create_draft(subject=p.subject, body=p.body, to=p.to, cc=p.cc, body_type=p.body_type)
+                case CommandType.GMAIL_ARCHIVE:
+                    p = GmailArchivePayload(**cmd.payload)
+                    result = await self.gmail.archive_email(message_id=p.message_id)
+                case CommandType.GMAIL_LIST_LABELS:
+                    result = await self.gmail.list_labels()
+                # --- Google Calendar ---
+                case CommandType.GCAL_LIST_EVENTS:
+                    p = GcalListEventsPayload(**cmd.payload)
+                    result = await self.gcal.list_events(start=p.start, end=p.end, top=p.top)
+                case CommandType.GCAL_CREATE_EVENT:
+                    p = GcalCreateEventPayload(**cmd.payload)
+                    result = await self.gcal.create_event(
+                        subject=p.subject, start=p.start, end=p.end, location=p.location,
+                        body=p.body, attendees=p.attendees, is_all_day=p.is_all_day, timezone_name=p.timezone_name,
+                    )
                 # --- Documents ---
                 case CommandType.CONVERT_MD_TO_PDF:
                     p = ConvertDocumentPayload(**cmd.payload)
@@ -361,6 +413,15 @@ async def run(web_port: int = 8001):
     if not agent.reminders.authorize():
         logger.error("Cannot access Reminders — check System Settings > Privacy > Reminders")
         return
+
+    # Google auth — try saved tokens first, prompt login if needed
+    if agent.google_auth.client_id:
+        if not await agent.google_auth.authorize():
+            logger.warning("Google not authenticated — Gmail/GCal commands unavailable")
+        else:
+            await agent.google_auth.start_background_refresh()
+    else:
+        logger.info("GOOGLE_CLIENT_ID not set — Gmail/GCal integration disabled")
 
     # Outlook auth — try saved tokens first, prompt login if needed
     if agent.outlook_auth.client_id:

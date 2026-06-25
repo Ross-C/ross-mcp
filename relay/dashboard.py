@@ -433,6 +433,22 @@ DASHBOARD_HTML = """<!DOCTYPE html>
                 </div>
 
                 <div class="bg-white border border-gray-200 rounded-xl p-5">
+                    <h3 class="text-gray-900 font-semibold mb-3">Gmail &amp; Google Calendar Setup</h3>
+                    <p class="text-gray-500 text-sm mb-3">To enable Gmail and Google Calendar integration:</p>
+                    <ol class="text-gray-500 text-sm space-y-2 list-decimal list-inside">
+                        <li>Go to <a href="https://console.cloud.google.com" class="text-blue-600 hover:underline">console.cloud.google.com</a> and create a project (or use an existing one)</li>
+                        <li>Enable the <strong class="text-gray-700">Gmail API</strong> and <strong class="text-gray-700">Google Calendar API</strong></li>
+                        <li>Go to <strong class="text-gray-700">APIs &amp; Services</strong> &gt; <strong class="text-gray-700">Credentials</strong> &gt; <strong class="text-gray-700">Create Credentials</strong> &gt; <strong class="text-gray-700">OAuth client ID</strong></li>
+                        <li>Application type: <strong class="text-gray-700">Desktop app</strong></li>
+                        <li>Add <code class="text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded text-xs">http://localhost:9877/callback</code> as an authorised redirect URI</li>
+                        <li>Add to your agent's <code class="text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded text-xs">.env</code> file:</li>
+                    </ol>
+                    <pre class="bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm font-mono text-gray-700 overflow-x-auto mt-3">GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=your-client-secret</pre>
+                    <p class="text-gray-400 text-xs mt-3">Restart the agent after adding credentials. It will open the browser for Google login on first run.</p>
+                </div>
+
+                <div class="bg-white border border-gray-200 rounded-xl p-5">
                     <h3 class="text-gray-900 font-semibold mb-3">REST API</h3>
                     <pre class="bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm font-mono text-gray-700 overflow-x-auto">curl -X POST https://ross-mcp-relay.fly.dev/api/command \\
   -H "Authorization: Bearer your-relay-api-key" \\
@@ -454,7 +470,9 @@ DASHBOARD_HTML = """<!DOCTYPE html>
 
     const TOOL_CATEGORIES = {
         'Email': ['search_emails', 'get_email', 'get_thread', 'create_draft', 'update_draft', 'send_draft', 'send_email', 'schedule_send', 'cancel_scheduled_send', 'archive_email', 'add_attachment'],
+        'Gmail': ['gmail_search', 'gmail_get_email', 'gmail_get_thread', 'gmail_create_draft', 'gmail_archive', 'gmail_list_labels'],
         'Calendar': ['list_events', 'create_event', 'update_event', 'cancel_event', 'find_available_slots'],
+        'Google Cal': ['gcal_list_events', 'gcal_create_event'],
         'Reminders': ['create_reminder', 'list_reminders', 'complete_reminder'],
         'Notes': ['search_notes', 'get_note', 'create_note', 'list_note_folders'],
         'Voice': ['list_recordings', 'transcribe_recording'],
@@ -466,7 +484,9 @@ DASHBOARD_HTML = """<!DOCTYPE html>
 
     const CATEGORY_COLOURS = {
         'Email': '#60a5fa',
+        'Gmail': '#f87171',
         'Calendar': '#6ee7b7',
+        'Google Cal': '#34d399',
         'Reminders': '#fbbf24',
         'Notes': '#c4b5fd',
         'Voice': '#f9a8d4',
@@ -543,6 +563,14 @@ DASHBOARD_HTML = """<!DOCTYPE html>
             'transcribe_recording': 'Transcribe',
             'convert_md_to_pdf': 'MD to PDF',
             'convert_md_to_docx': 'MD to DOCX',
+            'gmail_search': 'Search Gmail',
+            'gmail_get_email': 'Read Gmail',
+            'gmail_get_thread': 'Gmail thread',
+            'gmail_create_draft': 'Gmail draft',
+            'gmail_archive': 'Archive Gmail',
+            'gmail_list_labels': 'Gmail labels',
+            'gcal_list_events': 'GCal events',
+            'gcal_create_event': 'Create GCal event',
             'update_agent': 'Update agent',
             'agent_status': 'Agent status',
             'ping': 'Ping',

@@ -41,6 +41,17 @@ class CommandType(str, Enum):
     GET_NOTE = "get_note"
     CREATE_NOTE = "create_note"
     LIST_NOTE_FOLDERS = "list_note_folders"
+    # Gmail
+    GMAIL_SEARCH = "gmail_search"
+    GMAIL_GET_EMAIL = "gmail_get_email"
+    GMAIL_GET_THREAD = "gmail_get_thread"
+    GMAIL_CREATE_DRAFT = "gmail_create_draft"
+    GMAIL_ARCHIVE = "gmail_archive"
+    GMAIL_LIST_LABELS = "gmail_list_labels"
+    # Google Calendar
+    GCAL_LIST_EVENTS = "gcal_list_events"
+    GCAL_CREATE_EVENT = "gcal_create_event"
+    # System
     UPDATE_AGENT = "update_agent"
     AGENT_STATUS = "agent_status"
     PING = "ping"
@@ -223,6 +234,52 @@ class CreateNotePayload(BaseModel):
 
 class ListNoteFoldersPayload(BaseModel):
     pass
+
+
+# --- Gmail Payloads ---
+
+class GmailSearchPayload(BaseModel):
+    query: str
+    max_results: int = 10
+
+
+class GmailGetEmailPayload(BaseModel):
+    message_id: str
+
+
+class GmailGetThreadPayload(BaseModel):
+    thread_id: str
+
+
+class GmailCreateDraftPayload(BaseModel):
+    subject: str
+    body: str
+    to: list[str]
+    cc: list[str] | None = None
+    body_type: str = "html"
+
+
+class GmailArchivePayload(BaseModel):
+    message_id: str
+
+
+# --- Google Calendar Payloads ---
+
+class GcalListEventsPayload(BaseModel):
+    start: datetime | None = None
+    end: datetime | None = None
+    top: int = 20
+
+
+class GcalCreateEventPayload(BaseModel):
+    subject: str
+    start: datetime
+    end: datetime
+    location: str | None = None
+    body: str | None = None
+    attendees: list[str] | None = None
+    is_all_day: bool = False
+    timezone_name: str = "Europe/London"
 
 
 class UpdateAgentPayload(BaseModel):
