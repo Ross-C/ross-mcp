@@ -1,10 +1,10 @@
-"""Secure dashboard — login, agent status, command stats, and setup instructions."""
+"""Secure dashboard — login, agent status, persistent command stats, setup instructions."""
 
-import hashlib
-import hmac
 import os
 import secrets
-from collections import defaultdict
+import sqlite3
+import threading
+from contextlib import contextmanager
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Request, Response
@@ -13,56 +13,118 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 router = APIRouter()
 
 DASHBOARD_PASSWORD = os.getenv("DASHBOARD_PASSWORD", "")
-SESSION_SECRET = os.getenv("RELAY_API_KEY", secrets.token_hex(32))
+DB_PATH = os.getenv("DB_PATH", "/data/mcp_stats.db")
 
 # Active sessions (in-memory, cleared on restart)
 active_sessions: set[str] = set()
 MAX_SESSIONS = 20
 
-# --- Command Stats (in-memory) ---
+# --- SQLite ---
 
-command_stats: dict = {
-    "total": 0,
-    "by_type": defaultdict(int),
-    "by_date": defaultdict(lambda: defaultdict(int)),
-    "recent": [],
-}
-MAX_RECENT = 500
+_db_lock = threading.Lock()
 
 
-def record_command(command_type: str, agent_name: str, status: str, timestamp: datetime | None = None):
-    """Record a command execution for stats."""
-    ts = timestamp or datetime.now(timezone.utc)
-    date_key = ts.strftime("%Y-%m-%d")
+def _init_db():
+    with _db_lock:
+        conn = sqlite3.connect(DB_PATH)
+        conn.execute("""CREATE TABLE IF NOT EXISTS commands (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TEXT NOT NULL,
+            command_type TEXT NOT NULL,
+            agent TEXT NOT NULL,
+            status TEXT NOT NULL
+        )""")
+        conn.execute("""CREATE TABLE IF NOT EXISTS errors (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TEXT NOT NULL,
+            command_type TEXT,
+            agent TEXT,
+            error TEXT NOT NULL
+        )""")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_commands_ts ON commands(timestamp)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_commands_type ON commands(command_type)")
+        conn.commit()
+        conn.close()
 
-    command_stats["total"] += 1
-    command_stats["by_type"][command_type] += 1
-    command_stats["by_date"][date_key][command_type] += 1
 
-    command_stats["recent"].append({
-        "timestamp": ts.isoformat(),
-        "type": command_type,
-        "agent": agent_name,
-        "status": status,
-    })
-    if len(command_stats["recent"]) > MAX_RECENT:
-        command_stats["recent"] = command_stats["recent"][-MAX_RECENT:]
+@contextmanager
+def _get_db():
+    with _db_lock:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        try:
+            yield conn
+            conn.commit()
+        finally:
+            conn.close()
 
 
-def get_stats_summary() -> dict:
-    """Return stats for the dashboard API."""
-    return {
-        "total": command_stats["total"],
-        "by_type": dict(command_stats["by_type"]),
-        "by_date": {k: dict(v) for k, v in command_stats["by_date"].items()},
-    }
+def record_command(command_type: str, agent_name: str, status: str, error: str | None = None):
+    """Record a command execution to SQLite."""
+    ts = datetime.now(timezone.utc).isoformat()
+    try:
+        with _get_db() as conn:
+            conn.execute(
+                "INSERT INTO commands (timestamp, command_type, agent, status) VALUES (?, ?, ?, ?)",
+                (ts, command_type, agent_name, status),
+            )
+            if error:
+                conn.execute(
+                    "INSERT INTO errors (timestamp, command_type, agent, error) VALUES (?, ?, ?, ?)",
+                    (ts, command_type, agent_name, error),
+                )
+    except Exception:
+        pass  # Don't let stats recording break command execution
+
+
+def get_stats() -> dict:
+    """Query aggregated stats from SQLite."""
+    try:
+        with _get_db() as conn:
+            total = conn.execute("SELECT COUNT(*) FROM commands").fetchone()[0]
+
+            by_type = {}
+            for row in conn.execute("SELECT command_type, COUNT(*) as cnt FROM commands GROUP BY command_type"):
+                by_type[row["command_type"]] = row["cnt"]
+
+            by_date = {}
+            for row in conn.execute(
+                "SELECT DATE(timestamp) as d, command_type, COUNT(*) as cnt "
+                "FROM commands GROUP BY d, command_type ORDER BY d"
+            ):
+                by_date.setdefault(row["d"], {})[row["command_type"]] = row["cnt"]
+
+            recent = []
+            for row in conn.execute(
+                "SELECT timestamp, command_type, agent, status FROM commands ORDER BY id DESC LIMIT 200"
+            ):
+                recent.append(dict(row))
+
+            recent_errors = []
+            for row in conn.execute(
+                "SELECT timestamp, command_type, agent, error FROM errors ORDER BY id DESC LIMIT 50"
+            ):
+                recent_errors.append(dict(row))
+
+            by_agent = {}
+            for row in conn.execute(
+                "SELECT agent, COUNT(*) as cnt FROM commands GROUP BY agent"
+            ):
+                by_agent[row["agent"]] = row["cnt"]
+
+            return {
+                "total": total,
+                "by_type": by_type,
+                "by_date": by_date,
+                "by_agent": by_agent,
+                "recent": recent,
+                "recent_errors": recent_errors,
+            }
+    except Exception:
+        return {"total": 0, "by_type": {}, "by_date": {}, "recent": [], "recent_errors": []}
 
 
 # --- Session Auth ---
-
-def _sign_token(token: str) -> str:
-    return hmac.new(SESSION_SECRET.encode(), token.encode(), hashlib.sha256).hexdigest()
-
 
 def _create_session() -> str:
     token = secrets.token_urlsafe(32)
@@ -83,7 +145,6 @@ def _verify_session(request: Request) -> bool:
 async def dashboard_root(request: Request):
     if not _verify_session(request):
         return HTMLResponse(LOGIN_HTML)
-    from relay.relay import agents, command_log
     return HTMLResponse(DASHBOARD_HTML)
 
 
@@ -93,20 +154,18 @@ async def login(request: Request):
     password = form.get("password", "")
 
     if not DASHBOARD_PASSWORD:
-        return HTMLResponse(LOGIN_HTML.replace("<!-- ERROR -->", '<p class="text-red-400 text-sm mt-2">Dashboard password not configured on server</p>'))
+        return HTMLResponse(LOGIN_HTML.replace("<!-- ERROR -->",
+            '<p class="text-red-600 text-sm mt-3">Dashboard password not configured on server</p>'))
 
     if not secrets.compare_digest(str(password), DASHBOARD_PASSWORD):
-        return HTMLResponse(LOGIN_HTML.replace("<!-- ERROR -->", '<p class="text-red-400 text-sm mt-2">Incorrect password</p>'))
+        return HTMLResponse(LOGIN_HTML.replace("<!-- ERROR -->",
+            '<p class="text-red-600 text-sm mt-3">Incorrect password</p>'))
 
     token = _create_session()
     response = RedirectResponse(url="/", status_code=303)
     response.set_cookie(
-        key="session",
-        value=token,
-        httponly=True,
-        secure=True,
-        samesite="lax",
-        max_age=86400 * 7,
+        key="session", value=token,
+        httponly=True, secure=True, samesite="lax", max_age=86400 * 7,
     )
     return response
 
@@ -131,11 +190,14 @@ async def dashboard_stats(request: Request):
             "connected_at": a.connected_at.isoformat(),
             "last_seen": a.last_seen.isoformat(),
         }
-    return {
-        "agents": agent_data,
-        "stats": get_stats_summary(),
-        "recent": command_stats["recent"][-100:],
-    }
+    return {"agents": agent_data, "stats": get_stats()}
+
+
+# Initialise DB on import
+try:
+    _init_db()
+except Exception:
+    pass
 
 
 # --- HTML Templates ---
@@ -147,23 +209,26 @@ LOGIN_HTML = """<!DOCTYPE html>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Ross MCP</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>tailwind.config = { theme: { extend: { colors: {
+        brand: { 50: '#f0f7ff', 100: '#e0effe', 500: '#3b82f6', 600: '#2563eb' }
+    }}}}</script>
 </head>
-<body class="bg-slate-900 min-h-screen flex items-center justify-center">
+<body class="bg-gray-200 min-h-screen flex items-center justify-center">
     <div class="w-full max-w-sm">
-        <div class="bg-slate-800 border border-slate-700 rounded-lg p-8">
-            <h1 class="text-xl font-semibold text-white mb-1">Ross MCP</h1>
-            <p class="text-slate-400 text-sm mb-6">Sign in to the dashboard</p>
+        <div class="bg-white border border-gray-200 rounded-xl shadow-sm p-8">
+            <h1 class="text-lg font-semibold text-gray-900 mb-1">Ross MCP</h1>
+            <p class="text-gray-500 text-sm mb-6">Sign in to your dashboard</p>
             <form method="POST" action="/login">
                 <input
                     type="password"
                     name="password"
                     placeholder="Password"
                     autofocus
-                    class="w-full bg-slate-900 border border-slate-600 text-white rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500 placeholder-slate-500"
+                    class="w-full bg-gray-50 border border-gray-300 text-gray-900 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 placeholder-gray-400"
                 />
                 <button
                     type="submit"
-                    class="w-full mt-3 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded px-3 py-2 transition-colors"
+                    class="w-full mt-3 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg px-3 py-2.5 transition-colors"
                 >
                     Sign in
                 </button>
@@ -183,29 +248,31 @@ DASHBOARD_HTML = """<!DOCTYPE html>
     <title>Ross MCP</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3"></script>
+    <script>tailwind.config = { theme: { extend: { colors: {
+        brand: { 50: '#f0f7ff', 100: '#e0effe', 500: '#3b82f6', 600: '#2563eb' }
+    }}}}</script>
     <style>
-        [x-cloak] { display: none !important; }
-        .tab-active { border-bottom: 2px solid #3b82f6; color: #f8fafc; }
-        .tab-inactive { border-bottom: 2px solid transparent; color: #94a3b8; }
-        .tab-inactive:hover { color: #cbd5e1; }
+        .tab-active { color: #1d4ed8; border-bottom: 2px solid #3b82f6; }
+        .tab-inactive { color: #6b7280; border-bottom: 2px solid transparent; }
+        .tab-inactive:hover { color: #374151; }
     </style>
 </head>
-<body class="bg-slate-900 text-slate-200 min-h-screen">
+<body class="bg-gray-200 text-gray-800 min-h-screen">
 
     <!-- Nav -->
-    <nav class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-10">
+    <nav class="bg-white border-b border-gray-200 sticky top-0 z-10">
         <div class="max-w-6xl mx-auto px-4 sm:px-6 flex items-center justify-between h-14">
             <div class="flex items-center gap-6">
-                <span class="text-white font-semibold">Ross MCP</span>
-                <div class="flex gap-1" id="tabs">
+                <span class="text-gray-900 font-semibold text-sm">Ross MCP</span>
+                <div class="flex" id="tabs">
                     <button onclick="showTab('overview')" data-tab="overview" class="tab-active px-3 py-4 text-sm font-medium transition-colors">Overview</button>
                     <button onclick="showTab('agents')" data-tab="agents" class="tab-inactive px-3 py-4 text-sm font-medium transition-colors">Agents</button>
                     <button onclick="showTab('activity')" data-tab="activity" class="tab-inactive px-3 py-4 text-sm font-medium transition-colors">Activity</button>
+                    <button onclick="showTab('errors')" data-tab="errors" class="tab-inactive px-3 py-4 text-sm font-medium transition-colors">Errors</button>
                     <button onclick="showTab('setup')" data-tab="setup" class="tab-inactive px-3 py-4 text-sm font-medium transition-colors">Setup</button>
                 </div>
             </div>
-            <a href="/logout" class="text-slate-400 hover:text-white text-sm transition-colors">Sign out</a>
+            <a href="/logout" class="text-gray-400 hover:text-gray-600 text-sm transition-colors">Sign out</a>
         </div>
     </nav>
 
@@ -213,50 +280,47 @@ DASHBOARD_HTML = """<!DOCTYPE html>
 
         <!-- Overview Tab -->
         <div id="tab-overview">
-            <!-- Stat Cards -->
-            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
-                <div class="bg-slate-800 border border-slate-700 rounded-lg p-4">
-                    <div class="text-slate-400 text-xs font-medium uppercase tracking-wide">Agents</div>
-                    <div class="text-2xl font-semibold text-white mt-1" id="stat-agents">-</div>
+            <!-- Summary row -->
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+                <div class="bg-white border border-gray-200 rounded-xl p-4">
+                    <div class="text-gray-400 text-xs font-medium uppercase tracking-wide">Agents Online</div>
+                    <div class="text-2xl font-bold text-gray-900 mt-1" id="stat-agents">-</div>
                 </div>
-                <div class="bg-slate-800 border border-slate-700 rounded-lg p-4">
-                    <div class="text-slate-400 text-xs font-medium uppercase tracking-wide">Total Commands</div>
-                    <div class="text-2xl font-semibold text-white mt-1" id="stat-total">-</div>
+                <div class="bg-white border border-gray-200 rounded-xl p-4">
+                    <div class="text-gray-400 text-xs font-medium uppercase tracking-wide">Total Commands</div>
+                    <div class="text-2xl font-bold text-gray-900 mt-1" id="stat-total">-</div>
                 </div>
-                <div class="bg-slate-800 border border-slate-700 rounded-lg p-4">
-                    <div class="text-slate-400 text-xs font-medium uppercase tracking-wide">Emails Drafted</div>
-                    <div class="text-2xl font-semibold text-white mt-1" id="stat-drafts">-</div>
+                <div class="bg-white border border-gray-200 rounded-xl p-4">
+                    <div class="text-gray-400 text-xs font-medium uppercase tracking-wide">Today</div>
+                    <div class="text-2xl font-bold text-gray-900 mt-1" id="stat-today">-</div>
                 </div>
-                <div class="bg-slate-800 border border-slate-700 rounded-lg p-4">
-                    <div class="text-slate-400 text-xs font-medium uppercase tracking-wide">Reminders</div>
-                    <div class="text-2xl font-semibold text-white mt-1" id="stat-reminders">-</div>
-                </div>
-                <div class="bg-slate-800 border border-slate-700 rounded-lg p-4">
-                    <div class="text-slate-400 text-xs font-medium uppercase tracking-wide">Notes Created</div>
-                    <div class="text-2xl font-semibold text-white mt-1" id="stat-notes">-</div>
-                </div>
-                <div class="bg-slate-800 border border-slate-700 rounded-lg p-4">
-                    <div class="text-slate-400 text-xs font-medium uppercase tracking-wide">Transcriptions</div>
-                    <div class="text-2xl font-semibold text-white mt-1" id="stat-transcriptions">-</div>
+                <div class="bg-white border border-gray-200 rounded-xl p-4">
+                    <div class="text-gray-400 text-xs font-medium uppercase tracking-wide">Errors</div>
+                    <div class="text-2xl font-bold text-gray-900 mt-1" id="stat-errors">-</div>
                 </div>
             </div>
 
-            <!-- Charts -->
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
-                <div class="lg:col-span-2 bg-slate-800 border border-slate-700 rounded-lg p-5">
+            <!-- Tool breakdown -->
+            <div class="bg-white border border-gray-200 rounded-xl p-5 mb-6">
+                <h3 class="text-sm font-semibold text-gray-700 mb-4">Tool Usage Breakdown</h3>
+                <div id="tool-breakdown" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-1 text-sm"></div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                <div class="lg:col-span-2 bg-white border border-gray-200 rounded-xl p-5">
                     <div class="flex items-center justify-between mb-4">
-                        <h3 class="text-sm font-medium text-white">Commands by Day</h3>
-                        <select id="chart-range" onchange="updateCharts()" class="bg-slate-900 border border-slate-600 text-slate-300 text-xs rounded px-2 py-1">
-                            <option value="7">Last 7 days</option>
-                            <option value="14" selected>Last 14 days</option>
-                            <option value="30">Last 30 days</option>
+                        <h3 class="text-sm font-semibold text-gray-700">Commands by Day</h3>
+                        <select id="chart-range" onchange="updateCharts()" class="bg-gray-50 border border-gray-200 text-gray-600 text-xs rounded-lg px-2.5 py-1.5 focus:outline-none">
+                            <option value="7">7 days</option>
+                            <option value="14" selected>14 days</option>
+                            <option value="30">30 days</option>
                         </select>
                     </div>
-                    <canvas id="chart-daily" height="180"></canvas>
+                    <div class="relative" style="height:200px"><canvas id="chart-daily"></canvas></div>
                 </div>
-                <div class="bg-slate-800 border border-slate-700 rounded-lg p-5">
-                    <h3 class="text-sm font-medium text-white mb-4">By Category</h3>
-                    <canvas id="chart-categories" height="220"></canvas>
+                <div class="bg-white border border-gray-200 rounded-xl p-5">
+                    <h3 class="text-sm font-semibold text-gray-700 mb-4">Category Breakdown</h3>
+                    <div id="chart-cat-wrap" class="relative" style="height:200px"><canvas id="chart-categories"></canvas></div>
                 </div>
             </div>
         </div>
@@ -264,88 +328,108 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         <!-- Agents Tab -->
         <div id="tab-agents" class="hidden">
             <div id="agents-list" class="space-y-3">
-                <p class="text-slate-500">Loading...</p>
+                <p class="text-gray-400">Loading...</p>
             </div>
         </div>
 
         <!-- Activity Tab -->
         <div id="tab-activity" class="hidden">
-            <div class="bg-slate-800 border border-slate-700 rounded-lg overflow-hidden">
-                <div class="px-4 py-3 border-b border-slate-700 flex items-center gap-3">
+            <div class="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                <div class="px-4 py-3 border-b border-gray-100 flex items-center gap-3">
                     <input
                         type="text"
                         id="activity-filter"
                         placeholder="Filter by command type..."
                         oninput="renderActivity()"
-                        class="bg-slate-900 border border-slate-600 text-white rounded px-3 py-1.5 text-sm flex-1 max-w-xs focus:outline-none focus:border-blue-500 placeholder-slate-500"
+                        class="bg-gray-50 border border-gray-200 text-gray-700 rounded-lg px-3 py-1.5 text-sm flex-1 max-w-xs focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-400"
                     />
-                    <span class="text-slate-500 text-xs" id="activity-count"></span>
+                    <span class="text-gray-400 text-xs" id="activity-count"></span>
                 </div>
                 <div class="overflow-x-auto">
                     <table class="w-full text-sm">
                         <thead>
-                            <tr class="text-slate-400 text-xs uppercase tracking-wide border-b border-slate-700">
-                                <th class="text-left px-4 py-2 font-medium">Time</th>
-                                <th class="text-left px-4 py-2 font-medium">Command</th>
-                                <th class="text-left px-4 py-2 font-medium">Agent</th>
-                                <th class="text-left px-4 py-2 font-medium">Status</th>
+                            <tr class="text-gray-400 text-xs uppercase tracking-wide border-b border-gray-100 bg-gray-50">
+                                <th class="text-left px-4 py-2.5 font-medium">Time</th>
+                                <th class="text-left px-4 py-2.5 font-medium">Command</th>
+                                <th class="text-left px-4 py-2.5 font-medium">Agent</th>
+                                <th class="text-left px-4 py-2.5 font-medium">Status</th>
                             </tr>
                         </thead>
-                        <tbody id="activity-body"></tbody>
+                        <tbody id="activity-body" class="divide-y divide-gray-50"></tbody>
                     </table>
                 </div>
+            </div>
+        </div>
+
+        <!-- Errors Tab -->
+        <div id="tab-errors" class="hidden">
+            <div class="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="text-gray-400 text-xs uppercase tracking-wide border-b border-gray-100 bg-gray-50">
+                                <th class="text-left px-4 py-2.5 font-medium">Time</th>
+                                <th class="text-left px-4 py-2.5 font-medium">Command</th>
+                                <th class="text-left px-4 py-2.5 font-medium">Agent</th>
+                                <th class="text-left px-4 py-2.5 font-medium">Error</th>
+                            </tr>
+                        </thead>
+                        <tbody id="errors-body" class="divide-y divide-gray-50"></tbody>
+                    </table>
+                </div>
+                <div id="no-errors" class="hidden px-4 py-8 text-center text-gray-400 text-sm">No errors recorded</div>
             </div>
         </div>
 
         <!-- Setup Tab -->
         <div id="tab-setup" class="hidden">
             <div class="space-y-4 max-w-3xl">
-                <div class="bg-slate-800 border border-slate-700 rounded-lg p-5">
-                    <h3 class="text-white font-medium mb-3">Claude Desktop / Claude Web</h3>
-                    <p class="text-slate-400 text-sm mb-3">Add as a remote MCP server in Claude's settings:</p>
-                    <div class="bg-slate-900 rounded p-3 text-sm font-mono">
-                        <div class="text-slate-400 mb-1"># Settings</div>
-                        <div><span class="text-slate-500">URL:</span> <span class="text-blue-400">https://ross-mcp-relay.fly.dev/mcp/mcp</span></div>
-                        <div><span class="text-slate-500">Transport:</span> <span class="text-slate-300">Streamable HTTP</span></div>
-                        <div><span class="text-slate-500">Auth:</span> <span class="text-slate-300">Bearer token (your RELAY_API_KEY)</span></div>
+                <div class="bg-white border border-gray-200 rounded-xl p-5">
+                    <h3 class="text-gray-900 font-semibold mb-3">Claude Desktop / Claude Web</h3>
+                    <p class="text-gray-500 text-sm mb-3">Add as a remote MCP server in Claude's settings:</p>
+                    <div class="bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm font-mono">
+                        <div class="text-gray-400 text-xs mb-2"># MCP Server Settings</div>
+                        <div class="text-gray-700"><span class="text-gray-400">URL:</span> https://ross-mcp-relay.fly.dev/mcp/mcp</div>
+                        <div class="text-gray-700"><span class="text-gray-400">Transport:</span> Streamable HTTP</div>
+                        <div class="text-gray-700"><span class="text-gray-400">Auth:</span> Bearer token (your RELAY_API_KEY from .env)</div>
                     </div>
-                    <p class="text-slate-500 text-xs mt-3">In Claude Desktop: Settings > MCP Servers > Add Server. In Claude Web: same section in the sidebar settings.</p>
+                    <p class="text-gray-400 text-xs mt-3">In Claude Desktop: Settings &gt; MCP Servers &gt; Add Server</p>
                 </div>
 
-                <div class="bg-slate-800 border border-slate-700 rounded-lg p-5">
-                    <h3 class="text-white font-medium mb-3">Claude Code (CLI)</h3>
-                    <p class="text-slate-400 text-sm mb-3">Add to <code class="text-blue-400 bg-slate-900 px-1 rounded">~/.claude/settings.json</code>:</p>
-                    <pre class="bg-slate-900 rounded p-3 text-sm font-mono text-slate-300 overflow-x-auto">{
+                <div class="bg-white border border-gray-200 rounded-xl p-5">
+                    <h3 class="text-gray-900 font-semibold mb-3">Claude Code (CLI)</h3>
+                    <p class="text-gray-500 text-sm mb-3">Add to <code class="text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded text-xs">~/.claude/settings.json</code>:</p>
+                    <pre class="bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm font-mono text-gray-700 overflow-x-auto">{
   "mcpServers": {
     "ross-life-admin": {
       "type": "http",
       "url": "https://ross-mcp-relay.fly.dev/mcp/mcp",
       "headers": {
-        "Authorization": "Bearer YOUR_API_KEY"
+        "Authorization": "Bearer your-relay-api-key"
       }
     }
   }
 }</pre>
                 </div>
 
-                <div class="bg-slate-800 border border-slate-700 rounded-lg p-5">
-                    <h3 class="text-white font-medium mb-3">ChatGPT (Custom GPT)</h3>
-                    <ol class="text-slate-400 text-sm space-y-2 list-decimal list-inside">
-                        <li>Create a Custom GPT at <span class="text-blue-400">chat.openai.com</span></li>
-                        <li>Go to <strong class="text-slate-300">Configure</strong> > <strong class="text-slate-300">Actions</strong> > <strong class="text-slate-300">Create new action</strong></li>
-                        <li>Click <strong class="text-slate-300">Import from URL</strong> and enter: <code class="text-blue-400 bg-slate-900 px-1 rounded">https://ross-mcp-relay.fly.dev/openapi.json</code></li>
-                        <li>Under <strong class="text-slate-300">Authentication</strong>, select <strong class="text-slate-300">API Key</strong>, type <strong class="text-slate-300">Bearer</strong>, and paste your RELAY_API_KEY</li>
+                <div class="bg-white border border-gray-200 rounded-xl p-5">
+                    <h3 class="text-gray-900 font-semibold mb-3">ChatGPT (Custom GPT)</h3>
+                    <ol class="text-gray-500 text-sm space-y-2 list-decimal list-inside">
+                        <li>Create a Custom GPT at <span class="text-blue-600">chat.openai.com</span></li>
+                        <li>Go to <strong class="text-gray-700">Configure</strong> &gt; <strong class="text-gray-700">Actions</strong> &gt; <strong class="text-gray-700">Create new action</strong></li>
+                        <li>Click <strong class="text-gray-700">Import from URL</strong>: <code class="text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded text-xs">https://ross-mcp-relay.fly.dev/openapi.json</code></li>
+                        <li>Under <strong class="text-gray-700">Authentication</strong>, select <strong class="text-gray-700">API Key</strong>, type <strong class="text-gray-700">Bearer</strong>, and paste the same RELAY_API_KEY</li>
                     </ol>
                 </div>
 
-                <div class="bg-slate-800 border border-slate-700 rounded-lg p-5">
-                    <h3 class="text-white font-medium mb-3">REST API</h3>
-                    <pre class="bg-slate-900 rounded p-3 text-sm font-mono text-slate-300 overflow-x-auto">curl -X POST https://ross-mcp-relay.fly.dev/api/command \\
-  -H "Authorization: Bearer YOUR_API_KEY" \\
+                <div class="bg-white border border-gray-200 rounded-xl p-5">
+                    <h3 class="text-gray-900 font-semibold mb-3">REST API</h3>
+                    <pre class="bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm font-mono text-gray-700 overflow-x-auto">curl -X POST https://ross-mcp-relay.fly.dev/api/command \\
+  -H "Authorization: Bearer your-relay-api-key" \\
   -H "Content-Type: application/json" \\
   -d '{"type": "create_reminder", "payload": {"title": "Buy milk"}}'</pre>
-                    <p class="text-slate-500 text-xs mt-3">
-                        Swagger UI: <a href="/docs" class="text-blue-400 hover:underline">/docs</a>
+                    <p class="text-gray-400 text-xs mt-3">
+                        Interactive docs: <a href="/docs" class="text-blue-600 hover:underline">/docs</a>
                     </p>
                 </div>
             </div>
@@ -369,13 +453,13 @@ DASHBOARD_HTML = """<!DOCTYPE html>
     };
 
     const CATEGORY_COLOURS = {
-        'Email': '#3b82f6',
-        'Calendar': '#22c55e',
-        'Reminders': '#f59e0b',
-        'Notes': '#8b5cf6',
-        'Voice': '#ec4899',
-        'Documents': '#06b6d4',
-        'System': '#64748b',
+        'Email': '#60a5fa',
+        'Calendar': '#6ee7b7',
+        'Reminders': '#fbbf24',
+        'Notes': '#c4b5fd',
+        'Voice': '#f9a8d4',
+        'Documents': '#67e8f9',
+        'System': '#cbd5e1',
     };
 
     function showTab(name) {
@@ -396,9 +480,10 @@ DASHBOARD_HTML = """<!DOCTYPE html>
             renderOverview();
             renderAgents();
             renderActivity();
+            renderErrors();
             updateCharts();
         } catch (e) {
-            console.error('Failed to fetch data:', e);
+            console.error('Fetch failed:', e);
         }
     }
 
@@ -406,39 +491,102 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         if (!dashData) return;
         const s = dashData.stats;
         const bt = s.by_type || {};
+        const byDate = s.by_date || {};
+        const today = new Date().toISOString().split('T')[0];
+        const todayData = byDate[today] || {};
+        const todayTotal = Object.values(todayData).reduce((a, b) => a + b, 0);
+        const errorCount = (s.recent_errors || []).length;
+
         document.getElementById('stat-agents').textContent = Object.keys(dashData.agents).length;
-        document.getElementById('stat-total').textContent = s.total.toLocaleString();
-        document.getElementById('stat-drafts').textContent = (bt.create_draft || 0) + (bt.update_draft || 0);
-        document.getElementById('stat-reminders').textContent = bt.create_reminder || 0;
-        document.getElementById('stat-notes').textContent = bt.create_note || 0;
-        document.getElementById('stat-transcriptions').textContent = bt.transcribe_recording || 0;
+        document.getElementById('stat-total').textContent = (s.total || 0).toLocaleString();
+        document.getElementById('stat-today').textContent = todayTotal;
+        document.getElementById('stat-errors').textContent = errorCount;
+
+        // Render granular tool breakdown grouped by category
+        const TOOL_LABELS = {
+            'search_emails': 'Search emails',
+            'get_email': 'Read email',
+            'get_thread': 'Read thread',
+            'create_draft': 'Create draft',
+            'update_draft': 'Update draft',
+            'send_draft': 'Send draft',
+            'send_email': 'Send email',
+            'schedule_send': 'Schedule email',
+            'cancel_scheduled_send': 'Cancel scheduled',
+            'archive_email': 'Archive email',
+            'add_attachment': 'Add attachment',
+            'list_events': 'List events',
+            'create_event': 'Create event',
+            'update_event': 'Update event',
+            'cancel_event': 'Cancel event',
+            'find_available_slots': 'Find free slots',
+            'create_reminder': 'Create reminder',
+            'list_reminders': 'List reminders',
+            'complete_reminder': 'Complete reminder',
+            'search_notes': 'Search notes',
+            'get_note': 'Read note',
+            'create_note': 'Create note',
+            'list_note_folders': 'List folders',
+            'list_recordings': 'List recordings',
+            'transcribe_recording': 'Transcribe',
+            'convert_md_to_pdf': 'MD to PDF',
+            'convert_md_to_docx': 'MD to DOCX',
+            'update_agent': 'Update agent',
+            'agent_status': 'Agent status',
+            'ping': 'Ping',
+        };
+
+        let html = '';
+        for (const [cat, tools] of Object.entries(TOOL_CATEGORIES)) {
+            const catTools = tools.filter(t => bt[t]);
+            if (catTools.length === 0) continue;
+            const colour = CATEGORY_COLOURS[cat];
+            html += `<div class="mb-3">
+                <div class="flex items-center gap-2 mb-1.5">
+                    <div class="w-2 h-2 rounded-full" style="background:${colour}"></div>
+                    <span class="text-xs font-semibold text-gray-500 uppercase tracking-wide">${cat}</span>
+                </div>`;
+            for (const t of catTools) {
+                html += `<div class="flex justify-between py-0.5 pl-4">
+                    <span class="text-gray-600">${TOOL_LABELS[t] || t}</span>
+                    <span class="text-gray-900 font-medium tabular-nums">${bt[t]}</span>
+                </div>`;
+            }
+            html += '</div>';
+        }
+        document.getElementById('tool-breakdown').innerHTML = html || '<p class="text-gray-400 col-span-3">No commands recorded yet</p>';
     }
 
     function renderAgents() {
         if (!dashData) return;
         const el = document.getElementById('agents-list');
         const entries = Object.entries(dashData.agents);
+        const byAgent = dashData.stats.by_agent || {};
         if (entries.length === 0) {
-            el.innerHTML = '<div class="bg-slate-800 border border-slate-700 rounded-lg p-5 text-slate-500">No agents connected</div>';
+            el.innerHTML = '<div class="bg-white border border-gray-200 rounded-xl p-6 text-center text-gray-400">No agents connected</div>';
             return;
         }
         el.innerHTML = entries.map(([name, info]) => {
             const connectedAt = new Date(info.connected_at);
-            const uptime = Math.round((Date.now() - connectedAt.getTime()) / 60000);
-            const uptimeStr = uptime < 60 ? uptime + 'm' : Math.round(uptime / 60) + 'h ' + (uptime % 60) + 'm';
+            const mins = Math.round((Date.now() - connectedAt.getTime()) / 60000);
+            const uptime = mins < 60 ? mins + 'm' : Math.floor(mins / 60) + 'h ' + (mins % 60) + 'm';
+            const cmdCount = byAgent[name] || 0;
             return `
-            <div class="bg-slate-800 border border-slate-700 rounded-lg p-5">
-                <div class="flex items-center gap-2 mb-3">
-                    <div class="w-2 h-2 rounded-full bg-green-500"></div>
-                    <span class="text-white font-medium">${name}</span>
-                    <span class="text-slate-500 text-sm">${info.machine}</span>
+            <div class="bg-white border border-gray-200 rounded-xl p-5">
+                <div class="flex items-center justify-between mb-3">
+                    <div class="flex items-center gap-2">
+                        <div class="w-2 h-2 rounded-full bg-emerald-400"></div>
+                        <span class="text-gray-900 font-semibold">${name}</span>
+                        <span class="text-gray-400 text-sm font-normal">${info.machine}</span>
+                    </div>
+                    <span class="text-xs text-gray-400">${cmdCount} commands handled</span>
                 </div>
-                <div class="text-xs text-slate-400 mb-3">
-                    Connected ${connectedAt.toLocaleString()} (uptime: ${uptimeStr})
+                <div class="text-xs text-gray-400 mb-3">
+                    Connected ${connectedAt.toLocaleString()} &middot; Uptime: ${uptime} &middot; ${info.capabilities.length} tools
                 </div>
                 <div class="flex flex-wrap gap-1.5">
                     ${info.capabilities.map(c =>
-                        '<span class="bg-slate-700 text-slate-300 text-xs px-2 py-0.5 rounded">' + c + '</span>'
+                        '<span class="bg-gray-100 text-gray-500 text-xs px-2 py-0.5 rounded-full">' + c + '</span>'
                     ).join('')}
                 </div>
             </div>`;
@@ -448,18 +596,44 @@ DASHBOARD_HTML = """<!DOCTYPE html>
     function renderActivity() {
         if (!dashData) return;
         const filter = (document.getElementById('activity-filter').value || '').toLowerCase();
-        const items = [...dashData.recent].reverse().filter(r =>
-            !filter || r.type.toLowerCase().includes(filter)
+        const items = (dashData.stats.recent || []).filter(r =>
+            !filter || r.command_type.toLowerCase().includes(filter)
         );
         document.getElementById('activity-count').textContent = items.length + ' commands';
         document.getElementById('activity-body').innerHTML = items.map(r => {
             const time = new Date(r.timestamp).toLocaleString();
-            const statusClass = r.status === 'success' ? 'text-green-400' : 'text-red-400';
-            return `<tr class="border-b border-slate-700/50 hover:bg-slate-700/20">
-                <td class="px-4 py-2 text-slate-400 whitespace-nowrap">${time}</td>
-                <td class="px-4 py-2 text-slate-200 font-mono">${r.type}</td>
-                <td class="px-4 py-2 text-slate-400">${r.agent}</td>
-                <td class="px-4 py-2 ${statusClass}">${r.status}</td>
+            const ok = r.status === 'success';
+            return `<tr class="hover:bg-gray-50">
+                <td class="px-4 py-2.5 text-gray-400 whitespace-nowrap">${time}</td>
+                <td class="px-4 py-2.5 text-gray-700 font-mono text-xs">${r.command_type}</td>
+                <td class="px-4 py-2.5 text-gray-400">${r.agent}</td>
+                <td class="px-4 py-2.5">
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${ok ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}">
+                        ${r.status}
+                    </span>
+                </td>
+            </tr>`;
+        }).join('');
+    }
+
+    function renderErrors() {
+        if (!dashData) return;
+        const errors = dashData.stats.recent_errors || [];
+        const noErrors = document.getElementById('no-errors');
+        const tbody = document.getElementById('errors-body');
+        if (errors.length === 0) {
+            noErrors.classList.remove('hidden');
+            tbody.innerHTML = '';
+            return;
+        }
+        noErrors.classList.add('hidden');
+        tbody.innerHTML = errors.map(r => {
+            const time = new Date(r.timestamp).toLocaleString();
+            return `<tr class="hover:bg-gray-50">
+                <td class="px-4 py-2.5 text-gray-400 whitespace-nowrap">${time}</td>
+                <td class="px-4 py-2.5 text-gray-700 font-mono text-xs">${r.command_type || '-'}</td>
+                <td class="px-4 py-2.5 text-gray-400">${r.agent || '-'}</td>
+                <td class="px-4 py-2.5 text-red-600 text-xs max-w-md truncate">${r.error}</td>
             </tr>`;
         }).join('');
     }
@@ -469,7 +643,6 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         const days = parseInt(document.getElementById('chart-range').value) || 14;
         const byDate = dashData.stats.by_date || {};
 
-        // Build date labels for the range
         const labels = [];
         const now = new Date();
         for (let i = days - 1; i >= 0; i--) {
@@ -478,26 +651,22 @@ DASHBOARD_HTML = """<!DOCTYPE html>
             labels.push(d.toISOString().split('T')[0]);
         }
 
-        // Daily totals
         const dailyTotals = labels.map(date => {
             const dayData = byDate[date] || {};
             return Object.values(dayData).reduce((a, b) => a + b, 0);
         });
 
-        // Daily chart
         if (dailyChart) dailyChart.destroy();
         dailyChart = new Chart(document.getElementById('chart-daily'), {
             type: 'bar',
             data: {
-                labels: labels.map(d => {
-                    const parts = d.split('-');
-                    return parts[2] + '/' + parts[1];
-                }),
+                labels: labels.map(d => { const p = d.split('-'); return p[2] + '/' + p[1]; }),
                 datasets: [{
                     data: dailyTotals,
-                    backgroundColor: '#3b82f6',
-                    borderRadius: 3,
-                    maxBarThickness: 32,
+                    backgroundColor: '#93c5fd',
+                    hoverBackgroundColor: '#60a5fa',
+                    borderRadius: 4,
+                    maxBarThickness: 28,
                 }]
             },
             options: {
@@ -507,14 +676,14 @@ DASHBOARD_HTML = """<!DOCTYPE html>
                 scales: {
                     x: {
                         grid: { display: false },
-                        ticks: { color: '#64748b', font: { size: 11 } },
-                        border: { color: '#334155' },
+                        ticks: { color: '#9ca3af', font: { size: 11 } },
+                        border: { color: '#e5e7eb' },
                     },
                     y: {
                         beginAtZero: true,
-                        grid: { color: '#1e293b' },
+                        grid: { color: '#f3f4f6' },
                         ticks: {
-                            color: '#64748b',
+                            color: '#9ca3af',
                             font: { size: 11 },
                             stepSize: 1,
                             callback: v => Number.isInteger(v) ? v : '',
@@ -525,7 +694,6 @@ DASHBOARD_HTML = """<!DOCTYPE html>
             }
         });
 
-        // Category breakdown
         const catTotals = {};
         const bt = dashData.stats.by_type || {};
         for (const [cat, tools] of Object.entries(TOOL_CATEGORIES)) {
@@ -535,25 +703,41 @@ DASHBOARD_HTML = """<!DOCTYPE html>
 
         if (categoryChart) categoryChart.destroy();
         const catLabels = Object.keys(catTotals);
+
+        if (catLabels.length === 0) {
+            if (categoryChart) { categoryChart.destroy(); categoryChart = null; }
+            const wrap = document.getElementById('chart-cat-wrap');
+            if (!wrap.querySelector('.no-data')) {
+                wrap.innerHTML = '<p class="no-data text-gray-400 text-sm text-center" style="padding-top:80px">No data yet</p>';
+            }
+            return;
+        }
+        // Restore canvas if it was replaced
+        const wrap = document.getElementById('chart-cat-wrap');
+        if (!wrap.querySelector('canvas')) {
+            wrap.innerHTML = '<canvas id="chart-categories"></canvas>';
+        }
+
         categoryChart = new Chart(document.getElementById('chart-categories'), {
             type: 'doughnut',
             data: {
                 labels: catLabels,
                 datasets: [{
                     data: catLabels.map(c => catTotals[c]),
-                    backgroundColor: catLabels.map(c => CATEGORY_COLOURS[c] || '#64748b'),
+                    backgroundColor: catLabels.map(c => CATEGORY_COLOURS[c] || '#cbd5e1'),
                     borderWidth: 0,
+                    spacing: 2,
                 }]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                cutout: '65%',
+                cutout: '60%',
                 plugins: {
                     legend: {
                         position: 'bottom',
                         labels: {
-                            color: '#94a3b8',
+                            color: '#6b7280',
                             font: { size: 11 },
                             padding: 12,
                             usePointStyle: true,
@@ -565,7 +749,6 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         });
     }
 
-    // Initial load and auto-refresh
     fetchData();
     setInterval(fetchData, 10000);
     </script>

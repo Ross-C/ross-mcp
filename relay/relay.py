@@ -168,11 +168,19 @@ async def execute_command(command_type: CommandType, payload: dict) -> dict:
             command_type=command_type.value,
             agent_name=agent_id,
             status=response.status.value,
+            error=response.error,
         )
 
         return response.model_dump()
 
     except asyncio.TimeoutError:
+        from relay.dashboard import record_command
+        record_command(
+            command_type=command_type.value,
+            agent_name=agent_id,
+            status="error",
+            error="Agent did not respond in time",
+        )
         raise HTTPException(status_code=504, detail="Agent did not respond in time")
     finally:
         agent.pending_responses.pop(cmd.id, None)
