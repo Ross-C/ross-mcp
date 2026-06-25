@@ -45,7 +45,12 @@ async def lifespan(app):
         yield
 
 
-app = FastAPI(title="Ross MCP Relay", version="0.1.0", lifespan=lifespan)
+app = FastAPI(
+    title="Ross MCP Relay",
+    version="0.1.0",
+    lifespan=lifespan,
+    servers=[{"url": "https://ross-mcp-relay.fly.dev"}],
+)
 security = HTTPBearer()
 
 
