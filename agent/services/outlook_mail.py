@@ -173,12 +173,12 @@ class OutlookMailService:
         """Create a draft reply to an existing email.
 
         Uses Graph API createReply to keep the reply in-thread,
-        then patches the draft with the supplied body (and optional CC).
+        then prepends the supplied body to the quoted original message.
         """
         headers = await self.auth.get_headers()
         headers["Content-Type"] = "application/json"
 
-        # Step 1: Create reply draft (Graph populates subject, recipients, thread)
+        # Step 1: Create reply draft (Graph populates subject, recipients, thread + quoted body)
         async with httpx.AsyncClient(timeout=30) as client:
             resp = await client.post(
                 f"{GRAPH_URL}/me/messages/{message_id}/createReply",
@@ -190,9 +190,12 @@ class OutlookMailService:
 
         draft_id = draft["id"]
 
-        # Step 2: Patch with our body and optional CC
+        # Step 2: Prepend our reply body to the quoted original (preserves threading)
+        quoted_body = draft.get("body", {}).get("content", "")
+        combined_body = body + quoted_body
+
         update_data: dict = {
-            "body": {"contentType": body_type, "content": body},
+            "body": {"contentType": body_type, "content": combined_body},
         }
         if cc is not None:
             update_data["ccRecipients"] = [{"emailAddress": {"address": addr}} for addr in cc]

@@ -129,8 +129,10 @@ def get_stats() -> dict:
                 "recent": recent,
                 "recent_errors": recent_errors,
             }
-    except Exception:
-        return {"total": 0, "by_type": {}, "by_date": {}, "recent": [], "recent_errors": []}
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {"total": 0, "by_type": {}, "by_date": {}, "by_agent": {}, "recent": [], "recent_errors": []}
 
 
 # --- Session Auth ---
