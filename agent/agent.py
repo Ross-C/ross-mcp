@@ -49,6 +49,7 @@ from shared.messages import (
     GetNotePayload,
     CreateNotePayload,
     ListNoteFoldersPayload,
+    UpdateAgentPayload,
 )
 from agent.services.reminders import RemindersService
 from agent.services.outlook_auth import OutlookAuth
@@ -98,7 +99,8 @@ class Agent:
                         CommandType.GET_NOTE,
                         CommandType.CREATE_NOTE,
                         CommandType.LIST_NOTE_FOLDERS,
-                        CommandType.PING,
+                        CommandType.UPDATE_AGENT,
+                    CommandType.PING,
                     ]
                     if self.outlook_auth.is_authenticated:
                         capabilities.extend([
@@ -251,6 +253,8 @@ class Agent:
                     result = self.notes.create_note(title=p.title, body=p.body, folder=p.folder, body_is_html=p.body_is_html)
                 case CommandType.LIST_NOTE_FOLDERS:
                     result = self.notes.list_folders()
+                case CommandType.UPDATE_AGENT:
+                    result = await self._self_update()
                 case CommandType.PING:
                     result = {"pong": True, "agent": self.agent_name}
                 case _:
@@ -285,6 +289,38 @@ class Agent:
                 status=Status.ERROR,
                 error=str(e),
             )
+
+    async def _self_update(self) -> dict:
+        """Pull latest code from git, install deps, then schedule a restart."""
+        import subprocess as sp
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        try:
+            pull = sp.run(["git", "pull"], cwd=project_root, capture_output=True, text=True, timeout=30)
+            if pull.returncode != 0:
+                return {"error": f"git pull failed: {pull.stderr.strip()}"}
+
+            pip = sp.run(
+                [sys.executable, "-m", "pip", "install", "-q", "-r", "agent/requirements.txt"],
+                cwd=project_root, capture_output=True, text=True, timeout=60,
+            )
+
+            # Schedule restart after response is sent
+            async def _delayed_exit():
+                await asyncio.sleep(2)
+                logger.info("Restarting after self-update...")
+                os._exit(0)  # launchd KeepAlive restarts us
+
+            asyncio.get_event_loop().create_task(_delayed_exit())
+
+            return {
+                "status": "updated",
+                "agent": self.agent_name,
+                "git": pull.stdout.strip(),
+                "pip": "ok" if pip.returncode == 0 else pip.stderr.strip()[:200],
+                "restarting": True,
+            }
+        except Exception as e:
+            return {"error": f"Self-update failed: {e}"}
 
     def stop(self):
         self._running = False

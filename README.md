@@ -1,6 +1,6 @@
 # Ross MCP
 
-Personal life admin system — manage Apple Reminders, Outlook email/calendar, and Apple Notes from Claude, ChatGPT, or any MCP/API client.
+Personal life admin system — manage Apple Reminders, Outlook email/calendar, Apple Notes, voice memos, and documents from Claude, ChatGPT, or any MCP/API client.
 
 **Architecture:** Client (Claude/ChatGPT/API) → Cloud Relay (Fly.io) → Local Mac Agent → Apple APIs / Microsoft Graph
 
@@ -9,13 +9,16 @@ Personal life admin system — manage Apple Reminders, Outlook email/calendar, a
 | Category | Tools |
 |----------|-------|
 | **Apple Reminders** | Create, list, complete reminders |
-| **Outlook Email** | Search, read, draft, send, schedule, archive emails |
+| **Outlook Email** | Search, read threads, draft, send, schedule, archive, attachments |
 | **Outlook Calendar** | List events, create/update/cancel events, find free slots |
 | **Apple Notes** | Search, read, create notes, list folders |
 | **Voice Memos** | List recordings, transcribe with speaker diarization (Deepgram) |
+| **Documents** | Convert Markdown to PDF or DOCX |
+| **Agent Management** | Check agent status, trigger remote self-update |
 
-**24 tools** accessible from:
-- **Claude** (web/desktop/CLI) via MCP protocol
+**29 tools** accessible from:
+- **Claude Web/Desktop** via remote MCP (streamable-http)
+- **Claude Code** via remote MCP (same endpoint)
 - **ChatGPT** via Custom GPT Actions (OpenAPI)
 - **Any HTTP client** via REST API
 
@@ -25,10 +28,10 @@ Personal life admin system — manage Apple Reminders, Outlook email/calendar, a
 
 ```bash
 cd ross-mcp
-python3 -m venv .venv
+arch -arm64 python3 -m venv .venv   # Use arch -arm64 on Apple Silicon
 source .venv/bin/activate
 pip install -r agent/requirements.txt
-pip install mcp httpx
+pip install mcp httpx python-dotenv
 ```
 
 ### 2. Configure environment
@@ -38,19 +41,13 @@ cp .env.example .env
 # Edit .env — set RELAY_API_KEY (must match the Fly.io secret)
 ```
 
-### 3. Set up Outlook (one-time)
+### 3. Set up Outlook (one-time per Mac)
 
 ```bash
-# Install Azure CLI
 brew install azure-cli
-
-# Log in to Azure
 az login
-
-# Register the app and save credentials to .env
 ./agent/setup_azure.sh
 
-# Run the OAuth login (opens browser)
 python3 -c "
 import asyncio
 from dotenv import load_dotenv
@@ -62,7 +59,7 @@ print('Success!' if auth.is_authenticated else 'Failed')
 "
 ```
 
-You only need to do this once per Mac. The refresh token auto-renews every 3 days.
+The refresh token auto-renews every 3 days.
 
 ### 4. Run the agent
 
@@ -82,13 +79,13 @@ The agent will:
 ./agent/install.sh
 ```
 
-Creates a launchd service that starts on boot and keeps running.
+Creates a launchd service that starts on boot and stays running.
 
 ## Connecting Clients
 
-### Claude Web / Desktop (MCP)
+All clients connect to the **same remote endpoint** on the relay. No local MCP server needed.
 
-Connect to the remote MCP endpoint:
+### Claude Web / Desktop (MCP)
 
 | Setting | Value |
 |---------|-------|
@@ -104,11 +101,10 @@ Add to `~/.claude/settings.json`:
 {
   "mcpServers": {
     "ross-life-admin": {
-      "command": "/path/to/ross-mcp/.venv/bin/python",
-      "args": ["/path/to/ross-mcp/mcp_server.py"],
-      "env": {
-        "RELAY_API_KEY": "your-api-key",
-        "MCP_RELAY_URL": "https://ross-mcp-relay.fly.dev"
+      "type": "http",
+      "url": "https://ross-mcp-relay.fly.dev/mcp/mcp",
+      "headers": {
+        "Authorization": "Bearer YOUR_API_KEY"
       }
     }
   }
@@ -121,8 +117,6 @@ Add to `~/.claude/settings.json`:
 2. Add an **Action** → Import from URL: `https://ross-mcp-relay.fly.dev/openapi.json`
 3. Set auth to **Bearer** with your `RELAY_API_KEY`
 
-This imports all 22 tool endpoints. See the Swagger UI at `https://ross-mcp-relay.fly.dev/docs`.
-
 ### Direct REST API
 
 ```bash
@@ -132,39 +126,59 @@ curl -X POST https://ross-mcp-relay.fly.dev/api/command \
   -d '{"type": "create_reminder", "payload": {"title": "Buy milk"}}'
 ```
 
-## Deployment
+## Deployment & Updates
 
-### Cloud Relay (Fly.io)
+### Deploy workflow (from any machine)
 
-The relay runs on Fly.io in the `lhr` region. To deploy changes:
-
-```bash
-fly deploy
-```
-
-**Manage secrets:**
+The `deploy.sh` script handles the full deployment pipeline:
 
 ```bash
-fly secrets list --app ross-mcp-relay
-fly secrets set RELAY_API_KEY=your-key --app ross-mcp-relay
+# 1. Commit your changes
+git add . && git commit -m "your changes"
+
+# 2. Deploy everything
+./deploy.sh
 ```
 
-**View logs:**
+This will:
+1. Push code to git
+2. Deploy the relay to Fly.io
+3. Tell all connected agents to pull updates and restart
 
+### Manual steps
+
+**Deploy relay only:**
+```bash
+fly deploy --app ross-mcp-relay
+```
+
+**Update agents only (via any client):**
+Tell Claude/ChatGPT: "update the agents" — this triggers a git pull + restart on all connected agents.
+
+Or via API:
+```bash
+curl -X POST https://ross-mcp-relay.fly.dev/api/command \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"type": "update_agent", "payload": {}}'
+```
+
+**View relay logs:**
 ```bash
 fly logs --app ross-mcp-relay
 ```
 
-### Local Agent
+### Setting up a second Mac
 
-**Manual start:**
+1. Clone the repo
+2. Set up venv: `arch -arm64 python3 -m venv .venv && pip install -r agent/requirements.txt`
+3. Copy `.env` and change `AGENT_NAME` to identify the machine (e.g. `mac-mini`)
+4. Run `./agent/setup_azure.sh` then the OAuth login (one-time)
+5. Run `./agent/install.sh`
 
-```bash
-source .venv/bin/activate
-python -m agent.agent
-```
+Both agents connect to the same relay. Commands route to whichever is online. Use `agent_status` to see connected agents.
 
-**Launchd service commands:**
+### Launchd service commands
 
 | Action | Command |
 |--------|---------|
@@ -174,16 +188,6 @@ python -m agent.agent
 | Restart | Unload then load |
 | Logs | `tail -f ~/Library/Logs/mcp-agent/mcp-agent.log` |
 | Errors | `tail -f ~/Library/Logs/mcp-agent/mcp-agent.err` |
-
-### Setting up a second Mac
-
-1. Clone the repo
-2. Set up venv and install dependencies
-3. Copy `.env` and change `AGENT_NAME` to identify the machine
-4. Run `./agent/setup_azure.sh` then the OAuth login (one-time)
-5. Run `./agent/install.sh`
-
-Both agents connect to the same relay — commands route to whichever is online.
 
 ## Voice Memo Transcription
 
@@ -219,8 +223,7 @@ Record meetings on iPad using Voice Memos, share to iCloud Drive, then transcrib
 
 | Secret | Location | Notes |
 |--------|----------|-------|
-| `RELAY_API_KEY` | `.env` (local) | Shared by agent, MCP server, and clients |
-| `RELAY_API_KEY` | Fly.io secrets | Set via `fly secrets set` |
+| `RELAY_API_KEY` | `.env` (local) + Fly.io secrets | Shared by agent, relay, and clients |
 | `MS_CLIENT_ID` / `MS_CLIENT_SECRET` | `.env` (local) | Azure AD app credentials |
 | `.outlook_tokens.json` | Project root (gitignored) | OAuth tokens, auto-refreshed |
 | `DEEPGRAM_API_KEY` | `.env` (local) | For voice memo transcription |
@@ -229,7 +232,7 @@ Record meetings on iPad using Voice Memos, share to iCloud Drive, then transcrib
 
 ```bash
 python3 -c "import secrets; print(secrets.token_urlsafe(32))"
-# Update: .env, fly secrets set, and any client configs
+# Update: .env, fly secrets set, Claude settings.json, and ChatGPT action auth
 ```
 
 ## Project Structure
@@ -247,7 +250,8 @@ ross-mcp/
 │       ├── outlook_auth.py        # OAuth2 for Microsoft Graph
 │       ├── outlook_mail.py        # Outlook email operations
 │       ├── outlook_calendar.py    # Outlook calendar operations
-│       └── voice_memos.py         # Voice memo transcription (Deepgram)
+│       ├── voice_memos.py         # Voice memo transcription (Deepgram)
+│       └── documents.py           # Markdown to PDF/DOCX conversion
 ├── relay/                         # Cloud relay (Fly.io)
 │   ├── relay.py                   # FastAPI hub (WebSocket + HTTP + dashboard)
 │   ├── mcp_endpoint.py            # Remote MCP server (streamable-http)
@@ -255,17 +259,14 @@ ross-mcp/
 │   ├── Dockerfile
 │   └── requirements.txt
 ├── shared/
-│   └── messages.py                # Command/Response schemas (25 command types)
-├── mcp_server.py                  # Local MCP server (stdio, for Claude Code)
+│   └── messages.py                # Command/Response schemas (all command types)
+├── mcp_server.py                  # Local MCP server (stdio, legacy — use remote instead)
+├── deploy.sh                      # Full deploy: git push + relay deploy + agent update
 ├── fly.toml                       # Fly.io config
-├── .env.example                   # Environment template
-├── ROADMAP.md                     # Planned features
-└── SPRINT.md                      # Sprint log
+└── .env.example                   # Environment template
 ```
 
 ## Links
 
-- [Roadmap](ROADMAP.md) — Planned features
-- [Sprint Log](SPRINT.md) — Development history
 - [Fly.io Dashboard](https://fly.io/apps/ross-mcp-relay) — Deployment management
 - [Swagger UI](https://ross-mcp-relay.fly.dev/docs) — API documentation

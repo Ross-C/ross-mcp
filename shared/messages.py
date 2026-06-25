@@ -41,6 +41,8 @@ class CommandType(str, Enum):
     GET_NOTE = "get_note"
     CREATE_NOTE = "create_note"
     LIST_NOTE_FOLDERS = "list_note_folders"
+    UPDATE_AGENT = "update_agent"
+    AGENT_STATUS = "agent_status"
     PING = "ping"
 
 
@@ -221,6 +223,10 @@ class CreateNotePayload(BaseModel):
 
 class ListNoteFoldersPayload(BaseModel):
     pass
+
+
+class UpdateAgentPayload(BaseModel):
+    agent_name: str | None = None
 
 
 # --- Messages ---

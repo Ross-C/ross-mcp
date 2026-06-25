@@ -245,6 +245,27 @@ class OutlookMailService:
             return {"id": message_id, "status": "cancelled", "draft_kept": True}
         return {"error": f"No scheduled send found for {message_id}"}
 
+    async def move_email(self, message_id: str, destination: str) -> dict:
+        """Move an email to a folder.
+
+        Args:
+            message_id: The email message ID
+            destination: Folder name (inbox, archive, deleteditems, junkemail, etc.)
+        """
+        headers = await self.auth.get_headers()
+        headers["Content-Type"] = "application/json"
+
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.post(
+                f"{GRAPH_URL}/me/messages/{message_id}/move",
+                headers=headers,
+                json={"destinationId": destination},
+            )
+            resp.raise_for_status()
+            msg = resp.json()
+
+        return {"id": msg["id"], "status": f"moved_to_{destination}"}
+
     async def archive_email(self, message_id: str) -> dict:
         """Move an email to the Archive folder."""
         headers = await self.auth.get_headers()

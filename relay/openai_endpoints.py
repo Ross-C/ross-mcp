@@ -388,3 +388,46 @@ async def create_note(req: CreateNoteRequest, _=Depends(_get_api_key)):
 @router.post("/list-note-folders", summary="List all Apple Notes folders")
 async def list_note_folders(_=Depends(_get_api_key)):
     return await _run("list_note_folders")
+
+
+# =====================
+# Document Conversion
+# =====================
+
+class ConvertMdToPdfRequest(BaseModel):
+    md_path: str = Field(description="Absolute path to the .md file on the agent's Mac")
+    output_path: str | None = Field(default=None, description="Output path (defaults to same name with .pdf)")
+
+
+@router.post("/convert-md-to-pdf", summary="Convert Markdown to PDF")
+async def convert_md_to_pdf(req: ConvertMdToPdfRequest, _=Depends(_get_api_key)):
+    payload: dict = {"md_path": req.md_path}
+    if req.output_path: payload["output_path"] = req.output_path
+    return await _run("convert_md_to_pdf", payload)
+
+
+class ConvertMdToDocxRequest(BaseModel):
+    md_path: str = Field(description="Absolute path to the .md file on the agent's Mac")
+    output_path: str | None = Field(default=None, description="Output path (defaults to same name with .docx)")
+
+
+@router.post("/convert-md-to-docx", summary="Convert Markdown to DOCX")
+async def convert_md_to_docx(req: ConvertMdToDocxRequest, _=Depends(_get_api_key)):
+    payload: dict = {"md_path": req.md_path}
+    if req.output_path: payload["output_path"] = req.output_path
+    return await _run("convert_md_to_docx", payload)
+
+
+# =====================
+# Agent Management
+# =====================
+
+class UpdateAgentRequest(BaseModel):
+    agent_name: str | None = Field(default=None, description="Agent name to update (updates first available if omitted)")
+
+
+@router.post("/update-agent", summary="Update agent — git pull, install deps, restart")
+async def update_agent(req: UpdateAgentRequest, _=Depends(_get_api_key)):
+    payload: dict = {}
+    if req.agent_name: payload["agent_name"] = req.agent_name
+    return await _run("update_agent", payload)

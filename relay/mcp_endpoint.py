@@ -625,6 +625,39 @@ async def list_note_folders() -> str:
     return json.dumps(result, indent=2)
 
 
+# --- Agent Management Tools ---
+
+
+@mcp.tool()
+async def update_agent(agent_name: str | None = None) -> str:
+    """Update a local Mac agent — pulls latest code from git, installs deps, and restarts.
+
+    Args:
+        agent_name: Optional agent name to update (updates first available if omitted)
+    """
+    payload: dict = {}
+    if agent_name:
+        payload["agent_name"] = agent_name
+    result = await _send("update_agent", payload)
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def agent_status() -> str:
+    """Check which local Mac agents are connected and their capabilities."""
+    # This is handled directly by the relay, not routed to an agent
+    from relay.relay import agents
+    status = {}
+    for name, agent in agents.items():
+        status[name] = {
+            "machine": agent.registration.machine_name,
+            "capabilities": [c.value for c in agent.registration.capabilities],
+            "connected_at": agent.connected_at.isoformat(),
+            "last_seen": agent.last_seen.isoformat(),
+        }
+    return json.dumps({"agents": status}, indent=2)
+
+
 def create_mcp_app() -> BearerTokenMiddleware:
     """Create the MCP Starlette app with Bearer token auth.
 
