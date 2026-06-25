@@ -145,6 +145,20 @@ async def create_draft(req: CreateDraftRequest, _=Depends(_get_api_key)):
     return await _run("create_draft", payload)
 
 
+class DraftReplyRequest(BaseModel):
+    message_id: str = Field(description="Message ID of the email to reply to")
+    body: str = Field(description="Reply body (HTML by default)")
+    cc: list[str] | None = Field(default=None, description="CC addresses to add")
+    body_type: str = Field(default="HTML", description="HTML or Text")
+
+
+@router.post("/draft-a-reply", summary="Create a draft reply to an existing email (in-thread)")
+async def draft_a_reply(req: DraftReplyRequest, _=Depends(_get_api_key)):
+    payload: dict = {"message_id": req.message_id, "body": req.body, "body_type": req.body_type}
+    if req.cc: payload["cc"] = req.cc
+    return await _run("draft_reply", payload)
+
+
 class UpdateDraftRequest(BaseModel):
     message_id: str = Field(description="Draft message ID")
     subject: str | None = Field(default=None, description="New subject")

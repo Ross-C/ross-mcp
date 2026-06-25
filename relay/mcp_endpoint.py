@@ -220,6 +220,31 @@ async def create_email_draft(
 
 
 @mcp.tool()
+async def draft_a_reply(
+    message_id: str,
+    body: str,
+    cc: list[str] | None = None,
+    body_type: str = "HTML",
+) -> str:
+    """Create a draft reply to an existing Outlook email, keeping it in the same thread.
+
+    The reply is pre-populated with the original recipients and subject.
+    You only need to provide the reply body. Does NOT send.
+
+    Args:
+        message_id: The message ID of the email to reply to (from search_emails or get_email)
+        body: Reply body (HTML by default)
+        cc: Optional list of CC addresses to add
+        body_type: Content type — HTML (default) or Text
+    """
+    payload: dict = {"message_id": message_id, "body": body, "body_type": body_type}
+    if cc:
+        payload["cc"] = cc
+    result = await _send("draft_reply", payload)
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
 async def update_email_draft(
     message_id: str,
     subject: str | None = None,

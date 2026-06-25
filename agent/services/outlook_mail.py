@@ -163,6 +163,56 @@ class OutlookMailService:
             "status": "draft_created",
         }
 
+    async def draft_reply(
+        self,
+        message_id: str,
+        body: str,
+        cc: list[str] | None = None,
+        body_type: str = "HTML",
+    ) -> dict:
+        """Create a draft reply to an existing email.
+
+        Uses Graph API createReply to keep the reply in-thread,
+        then patches the draft with the supplied body (and optional CC).
+        """
+        headers = await self.auth.get_headers()
+        headers["Content-Type"] = "application/json"
+
+        # Step 1: Create reply draft (Graph populates subject, recipients, thread)
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.post(
+                f"{GRAPH_URL}/me/messages/{message_id}/createReply",
+                headers=headers,
+                json={},
+            )
+            resp.raise_for_status()
+            draft = resp.json()
+
+        draft_id = draft["id"]
+
+        # Step 2: Patch with our body and optional CC
+        update_data: dict = {
+            "body": {"contentType": body_type, "content": body},
+        }
+        if cc is not None:
+            update_data["ccRecipients"] = [{"emailAddress": {"address": addr}} for addr in cc]
+
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.patch(
+                f"{GRAPH_URL}/me/messages/{draft_id}",
+                headers=headers,
+                json=update_data,
+            )
+            resp.raise_for_status()
+            msg = resp.json()
+
+        return {
+            "id": msg["id"],
+            "subject": msg.get("subject", ""),
+            "to": [r["emailAddress"]["address"] for r in msg.get("toRecipients", [])],
+            "status": "reply_draft_created",
+        }
+
     async def send_draft(self, message_id: str) -> dict:
         """BLOCKED — sending is disabled. Emails must be sent manually from Outlook."""
         return {"error": "Sending is disabled. Please send the draft manually from Outlook."}

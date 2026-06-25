@@ -17,6 +17,7 @@ class CommandType(str, Enum):
     GET_EMAIL = "get_email"
     GET_THREAD = "get_thread"
     CREATE_DRAFT = "create_draft"
+    DRAFT_REPLY = "draft_reply"
     UPDATE_DRAFT = "update_draft"
     SEND_DRAFT = "send_draft"
     SEND_EMAIL = "send_email"
@@ -109,6 +110,13 @@ class CreateDraftPayload(BaseModel):
     subject: str
     body: str
     to: list[str]
+    cc: list[str] | None = None
+    body_type: str = "HTML"
+
+
+class DraftReplyPayload(BaseModel):
+    message_id: str
+    body: str
     cc: list[str] | None = None
     body_type: str = "HTML"
 

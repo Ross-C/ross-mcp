@@ -31,6 +31,7 @@ from shared.messages import (
     GetEmailPayload,
     GetThreadPayload,
     CreateDraftPayload,
+    DraftReplyPayload,
     UpdateDraftPayload,
     SendDraftPayload,
     SendEmailPayload,
@@ -147,6 +148,7 @@ class Agent:
                             CommandType.GET_EMAIL,
                             CommandType.GET_THREAD,
                             CommandType.CREATE_DRAFT,
+                            CommandType.DRAFT_REPLY,
                             CommandType.UPDATE_DRAFT,
                             CommandType.SEND_DRAFT,
                             CommandType.SEND_EMAIL,
@@ -224,6 +226,9 @@ class Agent:
                 case CommandType.CREATE_DRAFT:
                     p = CreateDraftPayload(**cmd.payload)
                     result = await self.mail.create_draft(subject=p.subject, body=p.body, to=p.to, cc=p.cc, body_type=p.body_type)
+                case CommandType.DRAFT_REPLY:
+                    p = DraftReplyPayload(**cmd.payload)
+                    result = await self.mail.draft_reply(message_id=p.message_id, body=p.body, cc=p.cc, body_type=p.body_type)
                 case CommandType.UPDATE_DRAFT:
                     p = UpdateDraftPayload(**cmd.payload)
                     result = await self.mail.update_draft(message_id=p.message_id, subject=p.subject, body=p.body, to=p.to, cc=p.cc, body_type=p.body_type)
