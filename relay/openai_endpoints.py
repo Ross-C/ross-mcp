@@ -590,6 +590,22 @@ async def local_weather(_=Depends(_get_api_key)):
 
 
 # =====================
+# Feedback
+# =====================
+
+class SubmitFeedbackRequest(BaseModel):
+    feedback: str = Field(description="The feedback Ross wants to record")
+    source: str = Field(default="voice", description="Where the feedback came from")
+
+
+@router.post("/submit-feedback", summary="Record feedback from Ross for later review and processing")
+async def submit_feedback(req: SubmitFeedbackRequest, _=Depends(_get_api_key)):
+    from relay.dashboard import record_feedback
+    record_feedback(feedback=req.feedback, source=req.source)
+    return {"status": "recorded", "message": "Feedback saved"}
+
+
+# =====================
 # Contacts
 # =====================
 

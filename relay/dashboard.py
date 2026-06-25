@@ -79,6 +79,15 @@ def _init_db():
             value TEXT NOT NULL
         )""")
         conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('small_talk', 'high')")
+        conn.execute("""CREATE TABLE IF NOT EXISTS feedback (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TEXT NOT NULL,
+            source TEXT,
+            feedback TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'new',
+            processed_at TEXT
+        )""")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_feedback_ts ON feedback(timestamp)")
         conn.execute("""CREATE TABLE IF NOT EXISTS contacts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
@@ -130,6 +139,28 @@ def set_setting(key: str, value: str):
             conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, value))
     except Exception:
         pass
+
+
+def record_feedback(feedback: str, source: str | None = None):
+    ts = datetime.now(timezone.utc).isoformat()
+    try:
+        with _get_db() as conn:
+            conn.execute(
+                "INSERT INTO feedback (timestamp, source, feedback) VALUES (?, ?, ?)",
+                (ts, source, feedback),
+            )
+    except Exception:
+        pass
+
+
+def get_feedback() -> list[dict]:
+    try:
+        with _get_db() as conn:
+            return [dict(r) for r in conn.execute(
+                "SELECT id, timestamp, source, feedback, status, processed_at FROM feedback ORDER BY id DESC LIMIT 100"
+            )]
+    except Exception:
+        return []
 
 
 def get_contacts() -> list[dict]:
@@ -280,6 +311,7 @@ def get_stats() -> dict:
                 "recent_errors": recent_errors,
                 "updates": updates,
                 "failed_requests": failed,
+                "feedback": get_feedback(),
             }
     except Exception as e:
         import traceback
@@ -379,6 +411,41 @@ async def dashboard_stats(request: Request):
             "current_task": task,
         }
     return {"agents": agent_data, "stats": get_stats()}
+
+
+@router.get("/api/dashboard/feedback")
+async def list_feedback(request: Request):
+    if not _verify_session(request):
+        return Response(status_code=401)
+    return {"feedback": get_feedback()}
+
+
+@router.post("/api/dashboard/feedback/{feedback_id}/process")
+async def mark_feedback_processed(feedback_id: int, request: Request):
+    if not _verify_session(request):
+        return Response(status_code=401)
+    ts = datetime.now(timezone.utc).isoformat()
+    try:
+        with _get_db() as conn:
+            conn.execute(
+                "UPDATE feedback SET status = 'processed', processed_at = ? WHERE id = ?",
+                (ts, feedback_id),
+            )
+        return {"status": "processed"}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@router.delete("/api/dashboard/feedback/{feedback_id}")
+async def delete_feedback(feedback_id: int, request: Request):
+    if not _verify_session(request):
+        return Response(status_code=401)
+    try:
+        with _get_db() as conn:
+            conn.execute("DELETE FROM feedback WHERE id = ?", (feedback_id,))
+        return {"status": "deleted"}
+    except Exception as e:
+        return {"error": str(e)}
 
 
 @router.get("/api/dashboard/settings")
@@ -557,6 +624,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
                     <button onclick="showTab('agents')" data-tab="agents" class="tab-inactive px-3 py-4 text-sm font-medium transition-colors">Agents</button>
                     <button onclick="showTab('activity')" data-tab="activity" class="tab-inactive px-3 py-4 text-sm font-medium transition-colors">Activity</button>
                     <button onclick="showTab('errors')" data-tab="errors" class="tab-inactive px-3 py-4 text-sm font-medium transition-colors">Errors</button>
+                    <button onclick="showTab('feedback')" data-tab="feedback" class="tab-inactive px-3 py-4 text-sm font-medium transition-colors">Feedback</button>
                     <button onclick="showTab('updates')" data-tab="updates" class="tab-inactive px-3 py-4 text-sm font-medium transition-colors">Updates</button>
                     <button onclick="showTab('contacts')" data-tab="contacts" class="tab-inactive px-3 py-4 text-sm font-medium transition-colors">Contacts</button>
                     <button onclick="showTab('setup')" data-tab="setup" class="tab-inactive px-3 py-4 text-sm font-medium transition-colors">Setup</button>
@@ -658,6 +726,12 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         <div id="tab-errors" class="hidden">
             <div class="space-y-3" id="failed-requests-list"></div>
             <div id="no-errors" class="hidden bg-white border border-gray-200 rounded-xl px-4 py-8 text-center text-gray-400 text-sm">No failed requests</div>
+        </div>
+
+        <!-- Feedback Tab -->
+        <div id="tab-feedback" class="hidden">
+            <div class="space-y-3" id="feedback-list"></div>
+            <div id="no-feedback" class="hidden bg-white border border-gray-200 rounded-xl px-4 py-8 text-center text-gray-400 text-sm">No feedback yet</div>
         </div>
 
         <!-- Updates Tab -->
@@ -916,6 +990,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
             renderAgents();
             renderActivity();
             renderErrors();
+            renderFeedback();
             renderUpdates();
             updateCharts();
         } catch (e) {
@@ -1238,6 +1313,57 @@ DASHBOARD_HTML = """<!DOCTYPE html>
     }
 
     fetchContacts();
+
+    // --- Feedback ---
+    function renderFeedback() {
+        if (!dashData) return;
+        const items = dashData.stats.feedback || [];
+        const list = document.getElementById('feedback-list');
+        const noFeedback = document.getElementById('no-feedback');
+        if (items.length === 0) {
+            noFeedback.classList.remove('hidden');
+            list.innerHTML = '';
+            return;
+        }
+        noFeedback.classList.add('hidden');
+        list.innerHTML = items.map(f => {
+            const time = new Date(f.timestamp).toLocaleString();
+            const isProcessed = f.status === 'processed';
+            const badge = isProcessed
+                ? '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-600">Processed</span>'
+                : '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-600">New</span>';
+            const source = f.source ? `<span class="text-gray-400 text-xs ml-2">${f.source}</span>` : '';
+            const actions = isProcessed
+                ? `<button onclick="deleteFeedback(${f.id})" class="text-xs text-red-400 hover:text-red-600">Delete</button>`
+                : `<button onclick="processFeedback(${f.id})" class="px-3 py-1.5 text-xs font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors">Mark processed</button>
+                   <button onclick="deleteFeedback(${f.id})" class="text-xs text-red-400 hover:text-red-600 ml-2">Delete</button>`;
+            return `<div class="bg-white border border-gray-200 rounded-xl p-4">
+                <div class="flex items-center justify-between mb-2">
+                    <div class="flex items-center gap-2">
+                        ${badge}
+                        ${source}
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <span class="text-xs text-gray-400">${time}</span>
+                        ${actions}
+                    </div>
+                </div>
+                <p class="text-gray-700 text-sm">${f.feedback}</p>
+                ${isProcessed ? '<div class="text-xs text-emerald-500 mt-2">Processed at ' + new Date(f.processed_at).toLocaleString() + '</div>' : ''}
+            </div>`;
+        }).join('');
+    }
+
+    async function processFeedback(id) {
+        await fetch('/api/dashboard/feedback/' + id + '/process', { method: 'POST' });
+        fetchData();
+    }
+
+    async function deleteFeedback(id) {
+        if (!confirm('Delete this feedback?')) return;
+        await fetch('/api/dashboard/feedback/' + id, { method: 'DELETE' });
+        fetchData();
+    }
 
     // --- Settings ---
     const SMALL_TALK_DESCS = {

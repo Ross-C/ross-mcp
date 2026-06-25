@@ -803,6 +803,21 @@ async def agent_status() -> str:
     return json.dumps({"agents": status}, indent=2)
 
 
+# --- Feedback Tool ---
+
+
+@mcp.tool()
+async def submit_feedback(feedback: str) -> str:
+    """Record feedback from Ross for later review and processing. Use when Ross says he has feedback or wants to note something for improvement.
+
+    Args:
+        feedback: The feedback to record
+    """
+    from relay.dashboard import record_feedback
+    record_feedback(feedback=feedback, source="mcp")
+    return json.dumps({"status": "recorded", "message": "Feedback saved"})
+
+
 # --- Contact Lookup Tool ---
 
 
