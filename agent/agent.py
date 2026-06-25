@@ -121,8 +121,9 @@ class Agent:
             return None
 
     async def connect(self):
-        """Connect to relay and process commands."""
+        """Connect to relay and process commands with exponential backoff."""
         headers = {"Authorization": f"Bearer {self.api_key}"}
+        backoff = 5
 
         while self._running:
             try:
@@ -132,6 +133,7 @@ class Agent:
                     additional_headers=headers,
                     ping_interval=20,
                     ping_timeout=10,
+                    open_timeout=15,
                 ) as ws:
                     # Register with relay
                     capabilities = [
@@ -196,20 +198,22 @@ class Agent:
                     )
                     await ws.send(reg.model_dump_json())
                     logger.info(f"Registered as '{self.agent_name}' (version {self._version})")
+                    backoff = 5  # Reset on successful connection
 
                     async for message in ws:
                         response = await self._handle_message(message)
                         await ws.send(response.model_dump_json())
 
             except websockets.ConnectionClosed:
-                logger.warning("Connection to relay lost, reconnecting in 5s...")
+                logger.warning(f"Connection to relay lost, reconnecting in {backoff}s...")
             except ConnectionRefusedError:
-                logger.warning("Relay not available, retrying in 5s...")
+                logger.warning(f"Relay not available, retrying in {backoff}s...")
             except Exception as e:
-                logger.error(f"Unexpected error: {e}, retrying in 5s...")
+                logger.error(f"Unexpected error: {e}, retrying in {backoff}s...")
 
             if self._running:
-                await asyncio.sleep(5)
+                await asyncio.sleep(backoff)
+                backoff = min(backoff * 2, 60)  # Back off up to 60s max
 
     async def _handle_message(self, raw: str) -> Response:
         """Parse and execute a command."""

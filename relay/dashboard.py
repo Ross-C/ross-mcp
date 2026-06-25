@@ -1548,7 +1548,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
     }
 
     fetchData();
-    setInterval(fetchData, 3000);
+    setInterval(fetchData, 5000);
     </script>
 </body>
 </html>"""
