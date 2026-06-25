@@ -162,6 +162,14 @@ async def execute_command(command_type: CommandType, payload: dict) -> dict:
         if len(command_log) > MAX_LOG_SIZE:
             command_log.pop(0)
 
+        # Record stats for dashboard
+        from relay.dashboard import record_command
+        record_command(
+            command_type=command_type.value,
+            agent_name=agent_id,
+            status=response.status.value,
+        )
+
         return response.model_dump()
 
     except asyncio.TimeoutError:
@@ -196,123 +204,10 @@ async def status(_: str = Depends(verify_api_key)):
     }
 
 
-@app.get("/", response_class=HTMLResponse)
-async def dashboard(request: Request):
-    """Simple web dashboard — no auth required for the page, but API calls need keys."""
-    return DASHBOARD_HTML
+# --- Mount dashboard and remote MCP endpoint ---
 
-
-DASHBOARD_HTML = """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ross MCP Relay</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-               background: #0a0a0a; color: #e0e0e0; padding: 2rem; }
-        h1 { color: #fff; margin-bottom: 0.5rem; }
-        .subtitle { color: #888; margin-bottom: 2rem; }
-        .card { background: #1a1a1a; border: 1px solid #333; border-radius: 8px;
-                padding: 1.5rem; margin-bottom: 1rem; }
-        .card h2 { color: #4fc3f7; margin-bottom: 1rem; font-size: 1.1rem; }
-        .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%;
-                      margin-right: 8px; }
-        .online { background: #4caf50; }
-        .offline { background: #f44336; }
-        .agent-row { padding: 0.75rem 0; border-bottom: 1px solid #222; }
-        .agent-row:last-child { border-bottom: none; }
-        .agent-name { font-weight: 600; color: #fff; }
-        .agent-meta { color: #888; font-size: 0.85rem; margin-top: 0.25rem; }
-        .log-entry { padding: 0.5rem 0; border-bottom: 1px solid #222; font-size: 0.85rem; }
-        .log-cmd { color: #81c784; }
-        .log-status { color: #4fc3f7; }
-        .log-error { color: #e57373; }
-        .auth-form { margin-bottom: 2rem; display: flex; gap: 0.5rem; }
-        input[type="password"] { background: #1a1a1a; border: 1px solid #333; color: #fff;
-                                  padding: 0.5rem 1rem; border-radius: 4px; flex: 1; max-width: 400px; }
-        button { background: #4fc3f7; color: #000; border: none; padding: 0.5rem 1.5rem;
-                 border-radius: 4px; cursor: pointer; font-weight: 600; }
-        button:hover { background: #29b6f6; }
-        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
-        @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } }
-        #error { color: #e57373; margin-top: 0.5rem; display: none; }
-    </style>
-</head>
-<body>
-    <h1>Ross MCP Relay</h1>
-    <p class="subtitle">Personal life admin command relay</p>
-
-    <div class="auth-form">
-        <input type="password" id="apiKey" placeholder="Enter API key..." />
-        <button onclick="connect()">Connect</button>
-    </div>
-    <p id="error"></p>
-
-    <div class="grid">
-        <div class="card">
-            <h2>Connected Agents</h2>
-            <div id="agents"><p style="color: #666;">Enter API key to view</p></div>
-        </div>
-        <div class="card">
-            <h2>Recent Commands</h2>
-            <div id="log"><p style="color: #666;">Enter API key to view</p></div>
-        </div>
-    </div>
-
-    <script>
-        let apiKey = '';
-        let refreshInterval;
-
-        async function connect() {
-            apiKey = document.getElementById('apiKey').value;
-            if (!apiKey) return;
-            try {
-                await refresh();
-                document.getElementById('error').style.display = 'none';
-                if (refreshInterval) clearInterval(refreshInterval);
-                refreshInterval = setInterval(refresh, 5000);
-            } catch (e) {
-                document.getElementById('error').textContent = 'Invalid API key';
-                document.getElementById('error').style.display = 'block';
-            }
-        }
-
-        async function refresh() {
-            const resp = await fetch('/api/status', {
-                headers: { 'Authorization': `Bearer ${apiKey}` }
-            });
-            if (!resp.ok) throw new Error('Unauthorized');
-            const data = await resp.json();
-
-            const agentsEl = document.getElementById('agents');
-            const entries = Object.entries(data.agents);
-            if (entries.length === 0) {
-                agentsEl.innerHTML = '<p style="color: #666;">No agents connected</p>';
-            } else {
-                agentsEl.innerHTML = entries.map(([name, info]) => `
-                    <div class="agent-row">
-                        <span class="status-dot online"></span>
-                        <span class="agent-name">${name}</span>
-                        <div class="agent-meta">${info.machine} &middot; Connected ${new Date(info.connected_at).toLocaleTimeString()}</div>
-                        <div class="agent-meta">Capabilities: ${info.capabilities.join(', ')}</div>
-                    </div>
-                `).join('');
-            }
-        }
-
-        document.getElementById('apiKey').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') connect();
-        });
-    </script>
-</body>
-</html>
-"""
-
-
-# --- Mount remote MCP endpoint ---
+from relay.dashboard import router as dashboard_router
+app.include_router(dashboard_router)
 
 from relay.mcp_endpoint import create_mcp_app, set_execute_command
 from relay.openai_endpoints import router as openai_router, init as openai_init

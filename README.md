@@ -207,11 +207,29 @@ Record meetings on iPad using Voice Memos, share to iCloud Drive, then transcrib
 2. Tell Claude: *"Transcribe my meeting with [name] from this morning"*
 3. Claude finds the recording, transcribes with speaker diarization, enriches with summary and action points, and saves as an Apple Note
 
+## Dashboard
+
+The relay includes a secure web dashboard at `https://ross-mcp-relay.fly.dev/`.
+
+**Features:**
+- Password-protected login (session cookie, httponly + secure)
+- Agent status with capabilities and uptime
+- Command stats with counters (emails drafted, reminders created, etc.)
+- Charts: commands by day (configurable range), breakdown by category
+- Filterable activity log
+- Client setup instructions (Claude Desktop, Claude Web, Claude Code, ChatGPT)
+
+**Set the dashboard password:**
+
+```bash
+fly secrets set DASHBOARD_PASSWORD=your-password --app ross-mcp-relay
+```
+
 ## Remote Endpoints
 
 | Endpoint | URL | Auth |
 |----------|-----|------|
-| Dashboard | `https://ross-mcp-relay.fly.dev/` | API key in UI |
+| Dashboard | `https://ross-mcp-relay.fly.dev/` | Dashboard password |
 | MCP (Claude) | `POST https://ross-mcp-relay.fly.dev/mcp/mcp` | Bearer token |
 | REST API | `POST https://ross-mcp-relay.fly.dev/api/command` | Bearer token |
 | Tool endpoints (ChatGPT) | `POST https://ross-mcp-relay.fly.dev/api/tools/*` | Bearer token |
@@ -224,6 +242,7 @@ Record meetings on iPad using Voice Memos, share to iCloud Drive, then transcrib
 | Secret | Location | Notes |
 |--------|----------|-------|
 | `RELAY_API_KEY` | `.env` (local) + Fly.io secrets | Shared by agent, relay, and clients |
+| `DASHBOARD_PASSWORD` | Fly.io secrets | Web dashboard login |
 | `MS_CLIENT_ID` / `MS_CLIENT_SECRET` | `.env` (local) | Azure AD app credentials |
 | `.outlook_tokens.json` | Project root (gitignored) | OAuth tokens, auto-refreshed |
 | `DEEPGRAM_API_KEY` | `.env` (local) | For voice memo transcription |
