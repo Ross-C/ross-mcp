@@ -10,6 +10,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+from pathlib import Path
 
 import websockets
 from aiohttp import web
@@ -69,7 +70,15 @@ from agent.services.voice_memos import VoiceMemosService
 from agent.services.documents import DocumentService
 
 load_dotenv()
+LOG_DIR = Path.home() / "Library/Logs/mcp-agent"
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(levelname)s: %(message)s")
+# Rotating file handler so logs persist across restarts
+from logging.handlers import RotatingFileHandler
+_fh = RotatingFileHandler(LOG_DIR / "agent.log", maxBytes=2_000_000, backupCount=3)
+_fh.setFormatter(logging.Formatter("%(asctime)s [%(name)s] %(levelname)s: %(message)s"))
+logging.getLogger().addHandler(_fh)
 logger = logging.getLogger("agent")
 
 
@@ -110,7 +119,12 @@ class Agent:
         while self._running:
             try:
                 logger.info(f"Connecting to relay at {self.relay_url}")
-                async with websockets.connect(self.relay_url, additional_headers=headers) as ws:
+                async with websockets.connect(
+                    self.relay_url,
+                    additional_headers=headers,
+                    ping_interval=20,
+                    ping_timeout=10,
+                ) as ws:
                     # Register with relay
                     capabilities = [
                         CommandType.CREATE_REMINDER,

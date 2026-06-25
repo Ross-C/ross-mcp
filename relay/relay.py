@@ -45,6 +45,40 @@ security = HTTPBearer()
 
 # --- Agent Registry ---
 
+TASK_DESCRIPTIONS = {
+    "search_emails": "Searching emails",
+    "get_email": "Reading an email",
+    "get_thread": "Reading email thread",
+    "create_draft": "Drafting an email",
+    "draft_reply": "Drafting a reply",
+    "update_draft": "Updating a draft",
+    "send_draft": "Sending a draft",
+    "send_email": "Sending an email",
+    "schedule_send": "Scheduling an email",
+    "cancel_scheduled_send": "Cancelling scheduled email",
+    "archive_email": "Archiving an email",
+    "add_attachment": "Adding attachment",
+    "list_events": "Checking calendar",
+    "create_event": "Creating calendar event",
+    "update_event": "Updating calendar event",
+    "cancel_event": "Cancelling calendar event",
+    "find_available_slots": "Finding free time slots",
+    "create_reminder": "Creating a reminder",
+    "list_reminders": "Listing reminders",
+    "complete_reminder": "Completing a reminder",
+    "search_notes": "Searching notes",
+    "get_note": "Reading a note",
+    "create_note": "Creating a note",
+    "list_note_folders": "Listing note folders",
+    "list_recordings": "Listing recordings",
+    "transcribe_recording": "Transcribing a recording",
+    "convert_md_to_pdf": "Converting to PDF",
+    "convert_md_to_docx": "Converting to DOCX",
+    "update_agent": "Updating agent",
+    "ping": "Ping",
+}
+
+
 class ConnectedAgent:
     def __init__(self, ws: WebSocket, registration: AgentRegistration):
         self.ws = ws
@@ -52,6 +86,7 @@ class ConnectedAgent:
         self.connected_at = datetime.now(timezone.utc)
         self.last_seen = self.connected_at
         self.pending_responses: dict[str, asyncio.Future] = {}
+        self.current_task: dict | None = None  # {"command_type": str, "description": str, "started_at": str}
 
 
 agents: dict[str, ConnectedAgent] = {}
@@ -149,8 +184,14 @@ async def execute_command(command_type: CommandType, payload: dict) -> dict:
     agent.pending_responses[cmd.id] = future
 
     try:
+        agent.current_task = {
+            "command_type": command_type.value,
+            "description": TASK_DESCRIPTIONS.get(command_type.value, command_type.value),
+            "started_at": datetime.now(timezone.utc).isoformat(),
+        }
         await agent.ws.send_text(cmd.model_dump_json())
         response = await asyncio.wait_for(future, timeout=30)
+        agent.current_task = None
 
         log_entry = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -174,6 +215,7 @@ async def execute_command(command_type: CommandType, payload: dict) -> dict:
         return response.model_dump()
 
     except asyncio.TimeoutError:
+        agent.current_task = None
         from relay.dashboard import record_command
         record_command(
             command_type=command_type.value,
@@ -182,6 +224,9 @@ async def execute_command(command_type: CommandType, payload: dict) -> dict:
             error="Agent did not respond in time",
         )
         raise HTTPException(status_code=504, detail="Agent did not respond in time")
+    except Exception:
+        agent.current_task = None
+        raise
     finally:
         agent.pending_responses.pop(cmd.id, None)
 
@@ -206,6 +251,7 @@ async def status(_: str = Depends(verify_api_key)):
                 "connected_at": a.connected_at.isoformat(),
                 "last_seen": a.last_seen.isoformat(),
                 "version": getattr(a.registration, 'version', None),
+                "current_task": a.current_task,
             }
             for name, a in agents.items()
         },

@@ -199,6 +199,7 @@ async def dashboard_stats(request: Request):
             "connected_at": a.connected_at.isoformat(),
             "last_seen": a.last_seen.isoformat(),
             "version": getattr(a.registration, 'version', None),
+            "current_task": a.current_task,
         }
     return {"agents": agent_data, "stats": get_stats()}
 
@@ -290,6 +291,8 @@ DASHBOARD_HTML = """<!DOCTYPE html>
 
         <!-- Overview Tab -->
         <div id="tab-overview">
+            <!-- Live agent status -->
+            <div id="live-agents" class="mb-4"></div>
             <!-- Summary row -->
             <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
                 <div class="bg-white border border-gray-200 rounded-xl p-4">
@@ -492,6 +495,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
             const resp = await fetch('/api/dashboard/stats');
             if (resp.status === 401) { window.location.href = '/'; return; }
             dashData = await resp.json();
+            renderLiveAgents();
             renderOverview();
             renderAgents();
             renderActivity();
@@ -500,6 +504,36 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         } catch (e) {
             console.error('Fetch failed:', e);
         }
+    }
+
+    function renderLiveAgents() {
+        if (!dashData) return;
+        const el = document.getElementById('live-agents');
+        const entries = Object.entries(dashData.agents);
+        if (entries.length === 0) {
+            el.innerHTML = '<div class="bg-amber-50 border border-amber-200 rounded-xl p-4 text-amber-700 text-sm">No agents online</div>';
+            return;
+        }
+        el.innerHTML = '<div class="grid grid-cols-1 sm:grid-cols-' + Math.min(entries.length, 3) + ' gap-3">' +
+            entries.map(([name, info]) => {
+                const task = info.current_task;
+                if (task) {
+                    return `<div class="bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-center gap-3">
+                        <div class="w-2 h-2 rounded-full bg-blue-500 animate-pulse flex-shrink-0"></div>
+                        <div>
+                            <span class="text-gray-900 font-semibold text-sm">${name}</span>
+                            <span class="text-blue-700 text-sm ml-2">${task.description}</span>
+                        </div>
+                    </div>`;
+                }
+                return `<div class="bg-white border border-gray-200 rounded-xl p-4 flex items-center gap-3">
+                    <div class="w-2 h-2 rounded-full bg-emerald-400 flex-shrink-0"></div>
+                    <div>
+                        <span class="text-gray-900 font-semibold text-sm">${name}</span>
+                        <span class="text-gray-400 text-sm ml-2">Idle</span>
+                    </div>
+                </div>`;
+            }).join('') + '</div>';
     }
 
     function renderOverview() {
@@ -593,6 +627,16 @@ DASHBOARD_HTML = """<!DOCTYPE html>
             const uptime = mins < 60 ? mins + 'm' : Math.floor(mins / 60) + 'h ' + (mins % 60) + 'm';
             const cmdCount = byAgent[name] || 0;
             const ver = info.version ? `<span class="text-gray-400 text-xs font-mono">${info.version}</span>` : '';
+            const task = info.current_task;
+            const taskHtml = task
+                ? `<div class="flex items-center gap-2 mt-3 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg">
+                    <div class="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></div>
+                    <span class="text-blue-700 text-sm font-medium">${task.description}</span>
+                   </div>`
+                : `<div class="flex items-center gap-2 mt-3 px-3 py-2 bg-gray-50 border border-gray-100 rounded-lg">
+                    <div class="w-1.5 h-1.5 rounded-full bg-gray-300"></div>
+                    <span class="text-gray-400 text-sm">Idle</span>
+                   </div>`;
             return `
             <div class="bg-white border border-gray-200 rounded-xl p-5">
                 <div class="flex items-center justify-between mb-3">
@@ -604,17 +648,21 @@ DASHBOARD_HTML = """<!DOCTYPE html>
                     </div>
                     <span class="text-xs text-gray-400">${cmdCount} commands handled</span>
                 </div>
-                <div class="text-xs text-gray-400 mb-3">
+                <div class="text-xs text-gray-400 mb-1">
                     Connected ${connectedAt.toLocaleString()} &middot; Uptime: ${uptime} &middot; ${info.capabilities.length} tools
                 </div>
-                <div class="flex flex-wrap gap-1.5">
-                    ${info.capabilities.map(c => {
-                        if (BLOCKED_TOOLS.has(c)) {
-                            return '<span class="bg-red-50 text-red-500 text-xs px-2 py-0.5 rounded-full border border-red-200" title="Blocked for safety">' + c + '</span>';
-                        }
-                        return '<span class="bg-gray-100 text-gray-500 text-xs px-2 py-0.5 rounded-full">' + c + '</span>';
-                    }).join('')}
-                </div>
+                ${taskHtml}
+                <details class="mt-3">
+                    <summary class="text-xs text-gray-400 cursor-pointer hover:text-gray-600">Show capabilities</summary>
+                    <div class="flex flex-wrap gap-1.5 mt-2">
+                        ${info.capabilities.map(c => {
+                            if (BLOCKED_TOOLS.has(c)) {
+                                return '<span class="bg-red-50 text-red-500 text-xs px-2 py-0.5 rounded-full border border-red-200" title="Blocked for safety">' + c + '</span>';
+                            }
+                            return '<span class="bg-gray-100 text-gray-500 text-xs px-2 py-0.5 rounded-full">' + c + '</span>';
+                        }).join('')}
+                    </div>
+                </details>
             </div>`;
         }).join('');
     }
@@ -629,9 +677,10 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         document.getElementById('activity-body').innerHTML = items.map(r => {
             const time = new Date(r.timestamp).toLocaleString();
             const ok = r.status === 'success';
+            const desc = TOOL_LABELS[r.command_type] || r.command_type;
             return `<tr class="hover:bg-gray-50">
                 <td class="px-4 py-2.5 text-gray-400 whitespace-nowrap">${time}</td>
-                <td class="px-4 py-2.5 text-gray-700 font-mono text-xs">${r.command_type}</td>
+                <td class="px-4 py-2.5"><span class="text-gray-700">${desc}</span> <span class="text-gray-300 font-mono text-xs">${r.command_type}</span></td>
                 <td class="px-4 py-2.5 text-gray-400">${r.agent}</td>
                 <td class="px-4 py-2.5">
                     <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${ok ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}">
@@ -776,7 +825,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
     }
 
     fetchData();
-    setInterval(fetchData, 10000);
+    setInterval(fetchData, 3000);
     </script>
 </body>
 </html>"""
