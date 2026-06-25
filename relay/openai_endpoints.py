@@ -22,6 +22,30 @@ def _coerce_to_list(v: Any) -> list[str]:
 EmailList = Annotated[list[str], BeforeValidator(_coerce_to_list)]
 OptionalEmailList = Annotated[list[str] | None, BeforeValidator(lambda v: _coerce_to_list(v) if isinstance(v, str) else v)]
 
+
+def _format_email_body(body: str) -> str:
+    """Ensure email body is properly formatted HTML with Aptos font and sign-off."""
+    body = body.strip()
+    # If already wrapped in our font div, return as-is
+    if "font-family:" in body and "Aptos" in body:
+        return body
+    # If it's plain text (no HTML tags), convert to HTML
+    if "<" not in body or "<p" not in body.lower():
+        paragraphs = body.split("\n\n") if "\n\n" in body else body.split("\n")
+        html_parts = [f"<p>{p.strip()}</p>" for p in paragraphs if p.strip()]
+        body = "".join(html_parts)
+    # Add sign-off if not present
+    if "kind regards" not in body.lower():
+        body += "<p>Kind regards<br>Ross</p>"
+    # Wrap in Aptos font div
+    return f'<div style="font-family:Aptos,Arial,Helvetica,sans-serif;font-size:12pt;color:rgb(0,0,0)">{body}</div>'
+
+
+def _all_recipients_allowed(recipients: list[str]) -> bool:
+    """Check if all recipients are allowed."""
+    from relay.dashboard import is_allowed_recipient
+    return all(is_allowed_recipient(email) for email in recipients)
+
 router = APIRouter(prefix="/api/tools", tags=["Tools"])
 _security = HTTPBearer()
 
@@ -171,7 +195,14 @@ class CreateDraftRequest(BaseModel):
 
 @router.post("/create-draft", summary="Create an Outlook email draft. Enrich the user's input into a polished email in Ross's style.")
 async def create_draft(req: CreateDraftRequest, _=Depends(_get_api_key)):
-    payload: dict = {"subject": req.subject, "body": req.body, "to": req.to, "body_type": req.body_type}
+    body = _format_email_body(req.body)
+    if _all_recipients_allowed(req.to):
+        payload: dict = {"subject": req.subject, "body": body, "to": req.to, "body_type": "HTML"}
+        if req.cc: payload["cc"] = req.cc
+        result = await _run("send_email", payload)
+        result["note"] = "Sent directly (all recipients are allowed)"
+        return result
+    payload: dict = {"subject": req.subject, "body": body, "to": req.to, "body_type": "HTML"}
     if req.cc: payload["cc"] = req.cc
     return await _run("create_draft", payload)
 
@@ -509,6 +540,23 @@ async def convert_md_to_docx(req: ConvertMdToDocxRequest, _=Depends(_get_api_key
     payload: dict = {"md_path": req.md_path}
     if req.output_path: payload["output_path"] = req.output_path
     return await _run("convert_md_to_docx", payload)
+
+
+# =====================
+# Contacts
+# =====================
+
+class LookupContactRequest(BaseModel):
+    name: str = Field(description="Contact name to look up (partial match)")
+
+
+@router.post("/lookup-contact", summary="Look up a contact by name to get their email address")
+async def lookup_contact(req: LookupContactRequest, _=Depends(_get_api_key)):
+    from relay.dashboard import lookup_contact as _lookup
+    contacts = _lookup(req.name)
+    if not contacts:
+        return {"contacts": [], "message": f"No contacts found matching '{req.name}'"}
+    return {"contacts": [{"name": c["name"], "email": c["email"], "company": c.get("company", ""), "allowed_recipient": bool(c["allowed_recipient"])} for c in contacts]}
 
 
 # =====================

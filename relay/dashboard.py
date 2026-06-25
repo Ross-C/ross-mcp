@@ -74,6 +74,13 @@ def _init_db():
             reprocessed_at TEXT
         )""")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_failed_ts ON failed_requests(timestamp)")
+        conn.execute("""CREATE TABLE IF NOT EXISTS contacts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            email TEXT NOT NULL UNIQUE,
+            company TEXT,
+            allowed_recipient INTEGER NOT NULL DEFAULT 0
+        )""")
         conn.commit()
         conn.close()
 
@@ -101,6 +108,38 @@ def record_update(source: str, summary: str, version: str | None = None):
             )
     except Exception:
         pass
+
+
+def get_contacts() -> list[dict]:
+    try:
+        with _get_db() as conn:
+            return [dict(r) for r in conn.execute("SELECT * FROM contacts ORDER BY name")]
+    except Exception:
+        return []
+
+
+def lookup_contact(name: str) -> list[dict]:
+    try:
+        with _get_db() as conn:
+            rows = conn.execute(
+                "SELECT * FROM contacts WHERE name LIKE ? COLLATE NOCASE",
+                (f"%{name}%",),
+            )
+            return [dict(r) for r in rows]
+    except Exception:
+        return []
+
+
+def is_allowed_recipient(email: str) -> bool:
+    try:
+        with _get_db() as conn:
+            row = conn.execute(
+                "SELECT allowed_recipient FROM contacts WHERE email = ? COLLATE NOCASE",
+                (email,),
+            ).fetchone()
+            return bool(row and row["allowed_recipient"])
+    except Exception:
+        return False
 
 
 def record_failed_request(endpoint: str, payload: str, error: str, source: str | None = None):
@@ -320,6 +359,57 @@ async def dashboard_stats(request: Request):
     return {"agents": agent_data, "stats": get_stats()}
 
 
+@router.get("/api/dashboard/contacts")
+async def list_contacts(request: Request):
+    if not _verify_session(request):
+        return Response(status_code=401)
+    return {"contacts": get_contacts()}
+
+
+@router.post("/api/dashboard/contacts")
+async def add_contact(request: Request):
+    if not _verify_session(request):
+        return Response(status_code=401)
+    data = await request.json()
+    try:
+        with _get_db() as conn:
+            conn.execute(
+                "INSERT INTO contacts (name, email, company, allowed_recipient) VALUES (?, ?, ?, ?)",
+                (data["name"], data["email"], data.get("company", ""), int(data.get("allowed_recipient", False))),
+            )
+        return {"status": "created"}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@router.put("/api/dashboard/contacts/{contact_id}")
+async def update_contact(contact_id: int, request: Request):
+    if not _verify_session(request):
+        return Response(status_code=401)
+    data = await request.json()
+    try:
+        with _get_db() as conn:
+            conn.execute(
+                "UPDATE contacts SET name=?, email=?, company=?, allowed_recipient=? WHERE id=?",
+                (data["name"], data["email"], data.get("company", ""), int(data.get("allowed_recipient", False)), contact_id),
+            )
+        return {"status": "updated"}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@router.delete("/api/dashboard/contacts/{contact_id}")
+async def delete_contact(contact_id: int, request: Request):
+    if not _verify_session(request):
+        return Response(status_code=401)
+    try:
+        with _get_db() as conn:
+            conn.execute("DELETE FROM contacts WHERE id=?", (contact_id,))
+        return {"status": "deleted"}
+    except Exception as e:
+        return {"error": str(e)}
+
+
 @router.post("/api/dashboard/retry/{request_id}")
 async def retry_failed_request(request_id: int, request: Request):
     """Retry a failed request by replaying its original payload."""
@@ -429,6 +519,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
                     <button onclick="showTab('activity')" data-tab="activity" class="tab-inactive px-3 py-4 text-sm font-medium transition-colors">Activity</button>
                     <button onclick="showTab('errors')" data-tab="errors" class="tab-inactive px-3 py-4 text-sm font-medium transition-colors">Errors</button>
                     <button onclick="showTab('updates')" data-tab="updates" class="tab-inactive px-3 py-4 text-sm font-medium transition-colors">Updates</button>
+                    <button onclick="showTab('contacts')" data-tab="contacts" class="tab-inactive px-3 py-4 text-sm font-medium transition-colors">Contacts</button>
                     <button onclick="showTab('setup')" data-tab="setup" class="tab-inactive px-3 py-4 text-sm font-medium transition-colors">Setup</button>
                 </div>
             </div>
@@ -540,6 +631,53 @@ DASHBOARD_HTML = """<!DOCTYPE html>
                 <div id="updates-list" class="divide-y divide-gray-50"></div>
                 <div id="no-updates" class="hidden px-4 py-8 text-center text-gray-400 text-sm">No updates recorded yet</div>
                 <div id="updates-pagination" class="px-4 py-3 border-t border-gray-100 flex items-center justify-between"></div>
+            </div>
+        </div>
+
+        <!-- Contacts Tab -->
+        <div id="tab-contacts" class="hidden">
+            <div class="bg-white border border-gray-200 rounded-xl p-5 mb-4">
+                <h3 class="text-sm font-semibold text-gray-700 mb-4">Add Contact</h3>
+                <form onsubmit="addContact(event)" class="flex flex-wrap gap-3 items-end">
+                    <div>
+                        <label class="text-xs text-gray-400 block mb-1">Name</label>
+                        <input type="text" id="c-name" required class="bg-gray-50 border border-gray-200 text-gray-700 rounded-lg px-3 py-1.5 text-sm w-40 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-400 block mb-1">Email</label>
+                        <input type="email" id="c-email" required class="bg-gray-50 border border-gray-200 text-gray-700 rounded-lg px-3 py-1.5 text-sm w-56 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-400 block mb-1">Company</label>
+                        <input type="text" id="c-company" class="bg-gray-50 border border-gray-200 text-gray-700 rounded-lg px-3 py-1.5 text-sm w-40 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <input type="checkbox" id="c-allowed" class="rounded" />
+                        <label for="c-allowed" class="text-xs text-gray-600">Direct send allowed</label>
+                    </div>
+                    <button type="submit" class="px-4 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors">Add</button>
+                </form>
+            </div>
+            <div class="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                <div class="px-4 py-3 border-b border-gray-100">
+                    <span class="text-sm font-semibold text-gray-700">Contact Directory</span>
+                    <span class="text-gray-400 text-xs ml-2" id="contacts-count"></span>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="text-gray-400 text-xs uppercase tracking-wide border-b border-gray-100 bg-gray-50">
+                                <th class="text-left px-4 py-2.5 font-medium">Name</th>
+                                <th class="text-left px-4 py-2.5 font-medium">Email</th>
+                                <th class="text-left px-4 py-2.5 font-medium">Company</th>
+                                <th class="text-left px-4 py-2.5 font-medium">Direct Send</th>
+                                <th class="text-left px-4 py-2.5 font-medium"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="contacts-body" class="divide-y divide-gray-50"></tbody>
+                    </table>
+                </div>
+                <div id="no-contacts" class="hidden px-4 py-8 text-center text-gray-400 text-sm">No contacts yet</div>
             </div>
         </div>
 
@@ -958,6 +1096,83 @@ DASHBOARD_HTML = """<!DOCTYPE html>
             btn.disabled = false;
         }
     }
+
+    // --- Contacts ---
+    let contactsData = [];
+
+    async function fetchContacts() {
+        try {
+            const resp = await fetch('/api/dashboard/contacts');
+            if (resp.status === 401) return;
+            const data = await resp.json();
+            contactsData = data.contacts || [];
+            renderContacts();
+        } catch(e) {}
+    }
+
+    function renderContacts() {
+        const tbody = document.getElementById('contacts-body');
+        const noContacts = document.getElementById('no-contacts');
+        document.getElementById('contacts-count').textContent = contactsData.length + ' contacts';
+        if (contactsData.length === 0) {
+            noContacts.classList.remove('hidden');
+            tbody.innerHTML = '';
+            return;
+        }
+        noContacts.classList.add('hidden');
+        tbody.innerHTML = contactsData.map(c => {
+            const allowed = c.allowed_recipient
+                ? '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-600">Yes</span>'
+                : '<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-400">No</span>';
+            return `<tr class="hover:bg-gray-50">
+                <td class="px-4 py-2.5 text-gray-700 font-medium">${c.name}</td>
+                <td class="px-4 py-2.5 text-gray-500 font-mono text-xs">${c.email}</td>
+                <td class="px-4 py-2.5 text-gray-400">${c.company || ''}</td>
+                <td class="px-4 py-2.5">${allowed}</td>
+                <td class="px-4 py-2.5">
+                    <div class="flex gap-2">
+                        <button onclick="toggleAllowed(${c.id}, ${!c.allowed_recipient})" class="text-xs ${c.allowed_recipient ? 'text-amber-500 hover:text-amber-700' : 'text-blue-500 hover:text-blue-700'}">${c.allowed_recipient ? 'Revoke' : 'Allow'}</button>
+                        <button onclick="deleteContact(${c.id})" class="text-xs text-red-400 hover:text-red-600">Delete</button>
+                    </div>
+                </td>
+            </tr>`;
+        }).join('');
+    }
+
+    async function addContact(e) {
+        e.preventDefault();
+        const data = {
+            name: document.getElementById('c-name').value,
+            email: document.getElementById('c-email').value,
+            company: document.getElementById('c-company').value,
+            allowed_recipient: document.getElementById('c-allowed').checked,
+        };
+        await fetch('/api/dashboard/contacts', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) });
+        document.getElementById('c-name').value = '';
+        document.getElementById('c-email').value = '';
+        document.getElementById('c-company').value = '';
+        document.getElementById('c-allowed').checked = false;
+        fetchContacts();
+    }
+
+    async function toggleAllowed(id, allowed) {
+        const c = contactsData.find(x => x.id === id);
+        if (!c) return;
+        await fetch('/api/dashboard/contacts/' + id, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({...c, allowed_recipient: allowed}),
+        });
+        fetchContacts();
+    }
+
+    async function deleteContact(id) {
+        if (!confirm('Delete this contact?')) return;
+        await fetch('/api/dashboard/contacts/' + id, { method: 'DELETE' });
+        fetchContacts();
+    }
+
+    fetchContacts();
 
     function updateCharts() {
         if (!dashData) return;

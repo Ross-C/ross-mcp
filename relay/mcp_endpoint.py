@@ -799,6 +799,23 @@ async def agent_status() -> str:
     return json.dumps({"agents": status}, indent=2)
 
 
+# --- Contact Lookup Tool ---
+
+
+@mcp.tool()
+async def lookup_contact(name: str) -> str:
+    """Look up a contact by name to get their email address. Use when Ross wants to email someone by name. Confirm the email address with Ross before proceeding.
+
+    Args:
+        name: Contact name to search for (partial match, case-insensitive)
+    """
+    from relay.dashboard import lookup_contact as _lookup
+    contacts = _lookup(name)
+    if not contacts:
+        return json.dumps({"contacts": [], "message": f"No contacts found matching '{name}'"})
+    return json.dumps({"contacts": [{"name": c["name"], "email": c["email"], "company": c.get("company", ""), "allowed_sender": bool(c["allowed_sender"])} for c in contacts]}, indent=2)
+
+
 def create_mcp_app() -> BearerTokenMiddleware:
     """Create the MCP Starlette app with Bearer token auth.
 
