@@ -360,10 +360,11 @@ from relay.dashboard import router as dashboard_router, set_agents
 set_agents(agents)
 app.include_router(dashboard_router)
 
-from relay.mcp_endpoint import create_mcp_app, set_execute_command
+from relay.mcp_endpoint import create_mcp_app, set_execute_command, set_agents as set_mcp_agents
 from relay.openai_endpoints import router as openai_router, init as openai_init
 
 set_execute_command(execute_command)
+set_mcp_agents(agents)
 openai_init(execute_command, verify_api_key)
 app.include_router(openai_router)
 app.mount("/mcp", create_mcp_app())

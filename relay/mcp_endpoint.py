@@ -83,12 +83,19 @@ mcp = FastMCP(
 
 
 _execute_command = None
+_agents_ref = None
 
 
 def set_execute_command(fn):
     """Called by relay.py to inject its execute_command function."""
     global _execute_command
     _execute_command = fn
+
+
+def set_agents(agents_dict):
+    """Called by relay.py to inject the agents registry."""
+    global _agents_ref
+    _agents_ref = agents_dict
 
 
 async def _send(command_type: str, payload: dict = {}) -> dict:
@@ -820,7 +827,7 @@ async def update_agent(agent_name: str | None = None) -> str:
 async def agent_status() -> str:
     """Check which local Mac agents are connected and their capabilities."""
     # This is handled directly by the relay, not routed to an agent
-    from relay.relay import agents
+    agents = _agents_ref or {}
     status = {}
     for name, agent in agents.items():
         status[name] = {

@@ -53,7 +53,7 @@ When adding a new tool, update ALL of these:
 
 ### ElevenLabs Voice Agent
 - Agent ID: `agent_1601kvz6xrrje8avnvdcchnsnwcf`
-- Voice: Kerry — Northern UK female (`Q7iNt6VsGSsBbtyUto9N`)
+- Voice: Sophie — Northern UK female (`Q7iNt6VsGSsBbtyUto9N`)
 - Model: `eleven_turbo_v2_5` (low latency)
 - 14 webhook tools pointing to `/api/tools/*`, authed via workspace secret `G8E20IiwKsZx00jnMr1I`
 - Phone: +441615203725 (Telnyx) → SIP → ElevenLabs → agent
