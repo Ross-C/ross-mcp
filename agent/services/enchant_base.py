@@ -39,11 +39,7 @@ class EnchantBaseService:
                             "id": t["id"],
                             "subject": t.get("subject", ""),
                             "customer": _format_customer(t.get("customer")),
-                            "reply_to": t.get("reply_to", ""),
-                            "assigned_to": _format_user(t.get("user")),
                             "state": t.get("state"),
-                            "updated_at": t.get("updated_at"),
-                            "summary": (t.get("summary") or "")[:200],
                         }
                         for t in tickets
                     ],

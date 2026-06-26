@@ -36,10 +36,6 @@ async def lifespan(app):
     msg = os.getenv("GIT_MESSAGE", "")
     record_update("relay", f"Relay deployed: {msg}" if msg else "Relay deployed and started", version=ver or None)
 
-    # Start weather cache background task
-    from relay.openai_endpoints import start_weather_cache
-    asyncio.create_task(start_weather_cache())
-
     # Start the MCP session manager (sub-app lifespans don't auto-run)
     from relay.mcp_endpoint import get_session_manager
     sm = get_session_manager()
@@ -265,7 +261,10 @@ async def execute_command(command_type: CommandType, payload: dict) -> dict:
             "status": "running",
         }
         await agent.ws.send_text(cmd.model_dump_json())
-        response = await asyncio.wait_for(future, timeout=30)
+        # Notes and transcription can take longer than 30s
+        slow_commands = {"search_notes", "get_note", "transcribe_recording"}
+        timeout = 60 if command_type.value in slow_commands else 30
+        response = await asyncio.wait_for(future, timeout=timeout)
         # Mark as done but keep visible for dashboard to catch
         agent.current_task = {
             **agent.current_task,

@@ -48,9 +48,19 @@ class OutlookMailService:
             "$top": str(top),
             "$select": "id,subject,from,toRecipients,receivedDateTime,bodyPreview,isRead,hasAttachments",
         }
-        if query.strip():
-            headers["ConsistencyLevel"] = "eventual"
-            params["$search"] = f'"{query}"'
+        q = query.strip()
+        if q:
+            # Detect date-based queries and use $filter instead of $search
+            import re
+            date_match = re.search(r"received\s*(ge|le|gt|lt|eq)\s*['\"]?(\d{4}-\d{2}-\d{2})", q, re.IGNORECASE)
+            if date_match:
+                op = date_match.group(1)
+                date_val = date_match.group(2)
+                params["$filter"] = f"receivedDateTime {op} {date_val}T00:00:00Z"
+                params["$orderby"] = "receivedDateTime desc"
+            else:
+                headers["ConsistencyLevel"] = "eventual"
+                params["$search"] = f'"{q}"'
         else:
             params["$orderby"] = "receivedDateTime desc"
 
@@ -353,6 +363,8 @@ class OutlookMailService:
                 headers=headers,
                 json={"destinationId": "archive"},
             )
+            if resp.status_code == 400:
+                return {"id": message_id, "status": "already_archived", "message": "Message may have already been archived or deleted"}
             resp.raise_for_status()
             msg = resp.json()
 

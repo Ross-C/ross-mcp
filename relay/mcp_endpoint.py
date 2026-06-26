@@ -175,9 +175,12 @@ async def search_emails(
 ) -> str:
     """Search Outlook emails. If query is empty, lists recent emails.
 
+    IMPORTANT: When asked about new emails, inbox, or "what's in my inbox", always set folder to "inbox".
+    Only search all folders when explicitly searching for something specific.
+
     Args:
         query: Search query (matches subject, body, sender, etc.). Leave empty to list recent emails.
-        folder: Optional folder (inbox, sentitems, drafts, archive)
+        folder: Folder to search (inbox, sentitems, drafts, archive). Default to "inbox" for new/unread email requests.
         top: Max results (default 10)
     """
     payload: dict = {"query": query, "top": top}
