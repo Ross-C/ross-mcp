@@ -51,6 +51,22 @@ class EnchantBaseService:
         except Exception as e:
             return {"error": f"Failed to list {self.label} tickets: {e}"}
 
+    async def close_ticket(self, ticket_id: str) -> dict:
+        """Close a support ticket."""
+        try:
+            async with httpx.AsyncClient(auth=(self.api_key, "X"), timeout=15) as client:
+                resp = await client.patch(
+                    f"{self.base_url}/tickets/{ticket_id}",
+                    json={"state": "closed"},
+                    headers={"Content-Type": "application/json"},
+                )
+                resp.raise_for_status()
+                return {"id": ticket_id, "status": "closed"}
+        except httpx.HTTPStatusError as e:
+            return {"error": f"Enchant API error: {e.response.status_code} {e.response.text[:200]}"}
+        except Exception as e:
+            return {"error": f"Failed to close {self.label} ticket: {e}"}
+
     async def get_ticket(self, ticket_id: str) -> dict:
         """Get full ticket details including messages."""
         try:

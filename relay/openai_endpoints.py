@@ -421,6 +421,15 @@ async def cbs_get_ticket(req: CBSGetTicketRequest, _=Depends(_get_api_key)):
     return await _run("cbs_get_ticket", {"ticket_id": req.ticket_id})
 
 
+class CBSCloseTicketRequest(BaseModel):
+    ticket_id: str = Field(description="Ticket ID to close")
+
+
+@router.post("/cbs-close-ticket", summary="Close a CBS support ticket")
+async def cbs_close_ticket(req: CBSCloseTicketRequest, _=Depends(_get_api_key)):
+    return await _run("cbs_close_ticket", {"ticket_id": req.ticket_id})
+
+
 class RCSCListTicketsRequest(BaseModel):
     state: str = Field(default="open", description="Ticket state: open, hold, closed, snoozed, archived")
     per_page: int = Field(default=20, description="Max tickets to return")
@@ -438,6 +447,15 @@ class RCSCGetTicketRequest(BaseModel):
 @router.post("/rcsc-get-ticket", summary="Get RCSC ticket details and messages")
 async def rcsc_get_ticket(req: RCSCGetTicketRequest, _=Depends(_get_api_key)):
     return await _run("rcsc_get_ticket", {"ticket_id": req.ticket_id})
+
+
+class RCSCCloseTicketRequest(BaseModel):
+    ticket_id: str = Field(description="Ticket ID to close")
+
+
+@router.post("/rcsc-close-ticket", summary="Close an RCSC support ticket")
+async def rcsc_close_ticket(req: RCSCCloseTicketRequest, _=Depends(_get_api_key)):
+    return await _run("rcsc_close_ticket", {"ticket_id": req.ticket_id})
 
 
 # =====================

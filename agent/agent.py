@@ -59,8 +59,10 @@ from shared.messages import (
     GmailArchivePayload,
     CBSListTicketsPayload,
     CBSGetTicketPayload,
+    CBSCloseTicketPayload,
     RCSCListTicketsPayload,
     RCSCGetTicketPayload,
+    RCSCCloseTicketPayload,
     UpdateAgentPayload,
 )
 from agent.services.reminders import RemindersService
@@ -155,11 +157,13 @@ class Agent:
                         capabilities.extend([
                             CommandType.CBS_LIST_TICKETS,
                             CommandType.CBS_GET_TICKET,
+                            CommandType.CBS_CLOSE_TICKET,
                         ])
                     if self.enchant_rcsc.is_configured:
                         capabilities.extend([
                             CommandType.RCSC_LIST_TICKETS,
                             CommandType.RCSC_GET_TICKET,
+                            CommandType.RCSC_CLOSE_TICKET,
                         ])
                     if self.google_auth.is_authenticated:
                         capabilities.extend([
@@ -327,6 +331,9 @@ class Agent:
                 case CommandType.CBS_GET_TICKET:
                     p = CBSGetTicketPayload(**cmd.payload)
                     result = await self.enchant_cbs.get_ticket(ticket_id=p.ticket_id)
+                case CommandType.CBS_CLOSE_TICKET:
+                    p = CBSCloseTicketPayload(**cmd.payload)
+                    result = await self.enchant_cbs.close_ticket(ticket_id=p.ticket_id)
                 # --- RCSC Support (Enchant) ---
                 case CommandType.RCSC_LIST_TICKETS:
                     p = RCSCListTicketsPayload(**cmd.payload)
@@ -334,6 +341,9 @@ class Agent:
                 case CommandType.RCSC_GET_TICKET:
                     p = RCSCGetTicketPayload(**cmd.payload)
                     result = await self.enchant_rcsc.get_ticket(ticket_id=p.ticket_id)
+                case CommandType.RCSC_CLOSE_TICKET:
+                    p = RCSCCloseTicketPayload(**cmd.payload)
+                    result = await self.enchant_rcsc.close_ticket(ticket_id=p.ticket_id)
                 # --- Documents ---
                 case CommandType.CONVERT_MD_TO_PDF:
                     p = ConvertDocumentPayload(**cmd.payload)

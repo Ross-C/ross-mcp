@@ -610,6 +610,17 @@ async def cbs_get_ticket(ticket_id: str) -> str:
 
 
 @mcp.tool()
+async def cbs_close_ticket(ticket_id: str) -> str:
+    """Close a CBS support ticket.
+
+    Args:
+        ticket_id: The ticket ID (from cbs_list_tickets or cbs_get_ticket)
+    """
+    result = await _send("cbs_close_ticket", {"ticket_id": ticket_id})
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
 async def rcsc_list_tickets(
     state: str = "open",
     per_page: int = 20,
@@ -634,6 +645,17 @@ async def rcsc_get_ticket(ticket_id: str) -> str:
         ticket_id: The ticket ID (from rcsc_list_tickets)
     """
     result = await _send("rcsc_get_ticket", {"ticket_id": ticket_id})
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def rcsc_close_ticket(ticket_id: str) -> str:
+    """Close an RCSC support ticket.
+
+    Args:
+        ticket_id: The ticket ID (from rcsc_list_tickets or rcsc_get_ticket)
+    """
+    result = await _send("rcsc_close_ticket", {"ticket_id": ticket_id})
     return json.dumps(result, indent=2)
 
 
