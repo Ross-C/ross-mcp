@@ -336,11 +336,13 @@ class MPDeleteAliasPayload(BaseModel):
 
 
 class MPCreateTaskPayload(BaseModel):
-    project_id: int
+    project_id: int | None = None
+    project_name: str | None = None
     title: str
     description: str | None = None
     due_date: str | None = None
     chargeable: bool = False
+    estimated_hours: float | None = None
 
 
 class MPUpdateTaskStatusPayload(BaseModel):

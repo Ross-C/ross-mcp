@@ -859,26 +859,38 @@ async def mp_delete_alias(alias_id: int) -> str:
 
 @mcp.tool()
 async def mp_create_task(
-    project_id: int,
     title: str,
-    description: str | None = None,
+    description: str,
+    project_name: str | None = None,
+    project_id: int | None = None,
     due_date: str | None = None,
     chargeable: bool = False,
+    estimated_hours: float | None = None,
 ) -> str:
-    """Create a new development task on a project in the MP Portal.
+    """Create a new development task. Always ask Ross for both a title and description. Optionally ask how many hours he thinks it will take. The task is automatically set to in-progress and a reminder is created to upload associated files.
+
+    You can provide project_name (e.g. 'ACHL', 'VSS Portal') and it will fuzzy-match. If the match is ambiguous, candidates are returned for Ross to choose from.
 
     Args:
-        project_id: The project ID (from mp_list_projects or mp_match_project)
-        title: Task title/description
-        description: Optional detailed description
+        title: Task title (short summary)
+        description: Task description (what needs to be done)
+        project_name: Project name, prefix, or partial match (e.g. 'ACHL', 'VSS'). Use this instead of project_id.
+        project_id: Project ID if already known (optional, use project_name instead)
         due_date: Optional due date in YYYY-MM-DD format
         chargeable: Whether this task is billable (default false)
+        estimated_hours: Optional estimated hours for the task
     """
-    payload: dict = {"project_id": project_id, "title": title, "chargeable": chargeable}
+    payload: dict = {"title": title, "chargeable": chargeable}
+    if project_name:
+        payload["project_name"] = project_name
+    if project_id:
+        payload["project_id"] = project_id
     if description:
         payload["description"] = description
     if due_date:
         payload["due_date"] = due_date
+    if estimated_hours is not None:
+        payload["estimated_hours"] = estimated_hours
     result = await _send("mp_create_task", payload)
     return json.dumps(result, indent=2)
 

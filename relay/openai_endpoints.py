@@ -656,20 +656,26 @@ async def mp_delete_alias(req: MPDeleteAliasRequest, _=Depends(_get_api_key)):
 
 
 class MPCreateTaskRequest(BaseModel):
-    project_id: int = Field(description="The project ID")
-    title: str = Field(description="Task title")
-    description: str | None = Field(default=None, description="Detailed description")
+    title: str = Field(description="Task title (short summary)")
+    description: str = Field(description="What needs to be done")
+    project_name: str | None = Field(default=None, description="Project name, prefix, or partial match (e.g. ACHL, VSS)")
+    project_id: int | None = Field(default=None, description="Project ID if already known")
     due_date: str | None = Field(default=None, description="Due date in YYYY-MM-DD format")
     chargeable: bool = Field(default=False, description="Whether this task is billable")
+    estimated_hours: float | None = Field(default=None, description="Estimated hours for the task")
 
 
-@router.post("/mp-create-task", summary="Create a new development task on a project")
+@router.post("/mp-create-task", summary="Create a new development task. Ask for title, description, and optionally hours. Auto-sets to in-progress and creates a reminder to upload files.")
 async def mp_create_task(req: MPCreateTaskRequest, _=Depends(_get_api_key)):
-    payload: dict = {"project_id": req.project_id, "title": req.title, "chargeable": req.chargeable}
-    if req.description:
-        payload["description"] = req.description
+    payload: dict = {"title": req.title, "description": req.description, "chargeable": req.chargeable}
+    if req.project_name:
+        payload["project_name"] = req.project_name
+    if req.project_id:
+        payload["project_id"] = req.project_id
     if req.due_date:
         payload["due_date"] = req.due_date
+    if req.estimated_hours is not None:
+        payload["estimated_hours"] = req.estimated_hours
     return await _run("mp_create_task", payload)
 
 
