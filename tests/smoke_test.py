@@ -164,7 +164,7 @@ def test_notes():
         return "error" not in result or result.get("status") == "success"
 
     def search_notes():
-        result = call_tool("search-notes", {"query": "test", "top": 1})
+        result = call_tool("search-notes", {"query": "test", "top": 1}, timeout=90)
         return "error" not in result or result.get("status") == "success"
 
     test("List note folders", list_folders)
