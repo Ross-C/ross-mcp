@@ -491,8 +491,8 @@ class Agent:
         )
 
         # Auto-set to in-progress
-        task_id = task_result.get("task", {}).get("id") or task_result.get("id")
-        task_ref = task_result.get("task", {}).get("reference") or task_result.get("reference") or ""
+        task_id = task_result.get("task_id") or task_result.get("task", {}).get("id") or task_result.get("id")
+        task_ref = task_result.get("project_task_id") or task_result.get("task", {}).get("reference") or ""
         if task_id:
             try:
                 await self.mp_portal.update_task_status(task_id=task_id, status="in_progress")
