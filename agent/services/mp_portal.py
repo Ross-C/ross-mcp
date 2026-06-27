@@ -1,16 +1,19 @@
 """MP Portal API service — development task management."""
 
+import json
 import logging
 import os
 import time
 from difflib import SequenceMatcher
+from pathlib import Path
 
 import httpx
 
 logger = logging.getLogger("agent.mp_portal")
 
-# Cache projects for 10 minutes
+# Cache projects for 10 minutes in memory, persist to disk
 CACHE_TTL = 600
+CACHE_FILE = Path(__file__).resolve().parent.parent.parent / ".mp_projects_cache.json"
 
 
 class MPPortalService:
@@ -20,6 +23,7 @@ class MPPortalService:
         self.api_base = f"{self.base_url}/api/portal/v1"
         self._project_cache: list[dict] = []
         self._cache_time: float = 0
+        self._load_disk_cache()
 
     @property
     def is_configured(self) -> bool:
@@ -31,10 +35,31 @@ class MPPortalService:
             "Accept": "application/json",
         }
 
-    # --- Project cache and fuzzy matching ---
+    # --- Persistent project cache ---
+
+    def _load_disk_cache(self):
+        """Load project cache from disk on startup."""
+        if CACHE_FILE.exists():
+            try:
+                data = json.loads(CACHE_FILE.read_text())
+                self._project_cache = data.get("projects", [])
+                self._cache_time = data.get("cached_at", 0)
+                logger.info(f"Loaded {len(self._project_cache)} projects from disk cache")
+            except Exception as e:
+                logger.warning(f"Failed to load disk cache: {e}")
+
+    def _save_disk_cache(self):
+        """Persist project cache to disk."""
+        try:
+            CACHE_FILE.write_text(json.dumps({
+                "projects": self._project_cache,
+                "cached_at": self._cache_time,
+            }, indent=2))
+        except Exception as e:
+            logger.warning(f"Failed to save disk cache: {e}")
 
     async def _ensure_cache(self):
-        """Refresh the project cache if stale."""
+        """Refresh the project cache if stale. Falls back to disk cache."""
         if self._project_cache and (time.time() - self._cache_time) < CACHE_TTL:
             return
         try:
@@ -43,9 +68,12 @@ class MPPortalService:
             if isinstance(projects, list) and projects:
                 self._project_cache = projects
                 self._cache_time = time.time()
-                logger.info(f"Cached {len(projects)} projects from MP Portal")
+                self._save_disk_cache()
+                logger.info(f"Cached {len(projects)} projects from MP Portal API")
         except Exception as e:
-            logger.warning(f"Failed to refresh project cache: {e}")
+            logger.warning(f"Failed to refresh project cache from API: {e}")
+            if not self._project_cache:
+                logger.warning("No cached projects available")
 
     def _fuzzy_match(self, query: str) -> list[dict]:
         """Match a query against cached projects by name, prefix, or similarity.
