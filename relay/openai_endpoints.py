@@ -680,30 +680,42 @@ async def mp_create_task(req: MPCreateTaskRequest, _=Depends(_get_api_key)):
 
 
 class MPUpdateTaskStatusRequest(BaseModel):
-    task_id: int = Field(description="The task ID")
     status: str = Field(description="New status: in_progress, completed, or deployed")
+    ref: str | None = Field(default=None, description="Task reference (e.g. EL-0186) or title")
+    task_id: int | None = Field(default=None, description="Numeric task ID if known")
     chargeable: bool | None = Field(default=None, description="Set true to mark as billable (for deployed)")
 
 
-@router.post("/mp-update-task-status", summary="Update a task's status (in_progress, completed, deployed)")
+@router.post("/mp-update-task-status", summary="Update a task's status. Use ref (e.g. EL-0186) or title, not numeric ID.")
 async def mp_update_task_status(req: MPUpdateTaskStatusRequest, _=Depends(_get_api_key)):
-    payload: dict = {"task_id": req.task_id, "status": req.status}
+    payload: dict = {"status": req.status}
+    if req.ref:
+        payload["ref"] = req.ref
+    if req.task_id:
+        payload["task_id"] = req.task_id
     if req.chargeable is not None:
         payload["chargeable"] = req.chargeable
     return await _run("mp_update_task_status", payload)
 
 
 class MPGetTaskRequest(BaseModel):
-    task_id: int = Field(description="The numeric task ID")
+    ref: str | None = Field(default=None, description="Task reference (e.g. EL-0186) or title")
+    task_id: int | None = Field(default=None, description="Numeric task ID if known")
 
 
-@router.post("/mp-get-task", summary="Get full details of a task")
+@router.post("/mp-get-task", summary="Get full details of a task. Use ref (e.g. EL-0186) or title.")
 async def mp_get_task(req: MPGetTaskRequest, _=Depends(_get_api_key)):
-    return await _run("mp_get_task", {"task_id": req.task_id})
+    payload: dict = {}
+    if req.ref:
+        payload["ref"] = req.ref
+    if req.task_id:
+        payload["task_id"] = req.task_id
+    return await _run("mp_get_task", payload)
 
 
 class MPUpdateTaskRequest(BaseModel):
-    task_id: int = Field(description="The numeric task ID")
+    ref: str | None = Field(default=None, description="Task reference (e.g. EL-0186) or title")
+    task_id: int | None = Field(default=None, description="Numeric task ID if known")
     hours_taken: float | None = Field(default=None, description="Hours spent on the task")
     customer_due_date: str | None = Field(default=None, description="Due date YYYY-MM-DD")
     chargeable: bool | None = Field(default=None, description="Whether billable")
@@ -711,9 +723,13 @@ class MPUpdateTaskRequest(BaseModel):
     description: str | None = Field(default=None, description="Updated description")
 
 
-@router.post("/mp-update-task", summary="Update task fields like hours, due date, description")
+@router.post("/mp-update-task", summary="Update task fields. Use ref (e.g. EL-0186) or title, not numeric ID.")
 async def mp_update_task(req: MPUpdateTaskRequest, _=Depends(_get_api_key)):
-    payload: dict = {"task_id": req.task_id}
+    payload: dict = {}
+    if req.ref:
+        payload["ref"] = req.ref
+    if req.task_id:
+        payload["task_id"] = req.task_id
     if req.hours_taken is not None:
         payload["hours_taken"] = req.hours_taken
     if req.customer_due_date is not None:

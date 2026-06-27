@@ -897,18 +897,24 @@ async def mp_create_task(
 
 @mcp.tool()
 async def mp_update_task_status(
-    task_id: int,
     status: str,
+    ref: str | None = None,
+    task_id: int | None = None,
     chargeable: bool | None = None,
 ) -> str:
-    """Update a task's status in the MP Portal. Use 'deployed' to mark as deployed (auto-fills dates for billing). Say 'deployed and bill it' to also set chargeable=true.
+    """Update a task's status. Use the task reference (e.g. 'EL-0186') or title. Never ask Ross for a numeric ID. Use 'deployed' to mark as deployed. Say 'deployed and bill it' to also set chargeable=true.
 
     Args:
-        task_id: The task ID (numeric, from search/list results)
         status: New status: in_progress, completed, or deployed
+        ref: Task reference (e.g. 'EL-0186') or title to search for
+        task_id: Numeric task ID if already known (prefer ref instead)
         chargeable: Set to true to mark as billable (only relevant for deployed)
     """
-    payload: dict = {"task_id": task_id, "status": status}
+    payload: dict = {"status": status}
+    if ref:
+        payload["ref"] = ref
+    if task_id:
+        payload["task_id"] = task_id
     if chargeable is not None:
         payload["chargeable"] = chargeable
     result = await _send("mp_update_task_status", payload)
@@ -916,36 +922,51 @@ async def mp_update_task_status(
 
 
 @mcp.tool()
-async def mp_get_task(task_id: int) -> str:
-    """Get full details of a task by its numeric ID.
+async def mp_get_task(
+    ref: str | None = None,
+    task_id: int | None = None,
+) -> str:
+    """Get full details of a task. Use the task reference (e.g. 'EL-0186') or search by title. Never ask Ross for a numeric ID.
 
     Args:
-        task_id: The numeric task ID (from search or create results)
+        ref: Task reference (e.g. 'EL-0186') or title to search for
+        task_id: Numeric task ID if already known (prefer ref instead)
     """
-    result = await _send("mp_get_task", {"task_id": task_id})
+    payload: dict = {}
+    if ref:
+        payload["ref"] = ref
+    if task_id:
+        payload["task_id"] = task_id
+    result = await _send("mp_get_task", payload)
     return json.dumps(result, indent=2)
 
 
 @mcp.tool()
 async def mp_update_task(
-    task_id: int,
+    ref: str | None = None,
+    task_id: int | None = None,
     hours_taken: float | None = None,
     customer_due_date: str | None = None,
     chargeable: bool | None = None,
     title: str | None = None,
     description: str | None = None,
 ) -> str:
-    """Update a task's fields (hours, due date, description, etc.). Use this to log hours on a task.
+    """Update a task's fields (hours, due date, description, etc.). Use the task reference (e.g. 'EL-0186') or title. Never ask Ross for a numeric ID.
 
     Args:
-        task_id: The numeric task ID
+        ref: Task reference (e.g. 'EL-0186') or title to search for
+        task_id: Numeric task ID if already known (prefer ref instead)
         hours_taken: Hours spent on the task
         customer_due_date: Due date in YYYY-MM-DD format
         chargeable: Whether this task is billable
         title: Updated task title
         description: Updated task description
     """
-    payload: dict = {"task_id": task_id}
+    payload: dict = {}
+    if ref:
+        payload["ref"] = ref
+    if task_id:
+        payload["task_id"] = task_id
     if hours_taken is not None:
         payload["hours_taken"] = hours_taken
     if customer_due_date is not None:

@@ -348,17 +348,20 @@ class MPCreateTaskPayload(BaseModel):
 
 
 class MPUpdateTaskStatusPayload(BaseModel):
-    task_id: int
+    task_id: int | None = None
+    ref: str | None = None
     status: str
     chargeable: bool | None = None
 
 
 class MPGetTaskPayload(BaseModel):
-    task_id: int
+    task_id: int | None = None
+    ref: str | None = None
 
 
 class MPUpdateTaskPayload(BaseModel):
-    task_id: int
+    task_id: int | None = None
+    ref: str | None = None
     hours_taken: float | None = None
     production_hours: float | None = None
     customer_due_date: str | None = None

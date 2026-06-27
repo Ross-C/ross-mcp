@@ -393,20 +393,32 @@ class Agent:
                     result = await self._handle_mp_create_task(p)
                 case CommandType.MP_UPDATE_TASK_STATUS:
                     p = MPUpdateTaskStatusPayload(**cmd.payload)
-                    result = await self.mp_portal.update_task_status(
-                        task_id=p.task_id, status=p.status, chargeable=p.chargeable,
-                    )
+                    tid = p.task_id or (await self._resolve_task_id(p.ref) if p.ref else None)
+                    if not tid:
+                        result = {"error": "Task not found. Provide a task reference (e.g. EL-0186) or title."}
+                    else:
+                        result = await self.mp_portal.update_task_status(
+                            task_id=tid, status=p.status, chargeable=p.chargeable,
+                        )
                 case CommandType.MP_GET_TASK:
                     p = MPGetTaskPayload(**cmd.payload)
-                    result = await self.mp_portal.get_task(task_id=p.task_id)
+                    tid = p.task_id or (await self._resolve_task_id(p.ref) if p.ref else None)
+                    if not tid:
+                        result = {"error": "Task not found. Provide a task reference (e.g. EL-0186) or title."}
+                    else:
+                        result = await self.mp_portal.get_task(task_id=tid)
                 case CommandType.MP_UPDATE_TASK:
                     p = MPUpdateTaskPayload(**cmd.payload)
-                    result = await self.mp_portal.update_task(
-                        task_id=p.task_id, hours_taken=p.hours_taken,
-                        production_hours=p.production_hours, customer_due_date=p.customer_due_date,
-                        chargeable=p.chargeable, title=p.title,
-                        non_technical_description=p.description,
-                    )
+                    tid = p.task_id or (await self._resolve_task_id(p.ref) if p.ref else None)
+                    if not tid:
+                        result = {"error": "Task not found. Provide a task reference (e.g. EL-0186) or title."}
+                    else:
+                        result = await self.mp_portal.update_task(
+                            task_id=tid, hours_taken=p.hours_taken,
+                            production_hours=p.production_hours, customer_due_date=p.customer_due_date,
+                            chargeable=p.chargeable, title=p.title,
+                            non_technical_description=p.description,
+                        )
                 case CommandType.MP_SEARCH_TASKS:
                     p = MPSearchTasksPayload(**cmd.payload)
                     result = await self.mp_portal.search_tasks(query=p.query)
@@ -480,6 +492,15 @@ class Agent:
                 status=Status.ERROR,
                 error=str(e),
             )
+
+    async def _resolve_task_id(self, ref: str) -> int | None:
+        """Resolve a task reference (e.g. EL-0186 or title) to a numeric ID."""
+        try:
+            data = await self.mp_portal.resolve_task(ref)
+            return data.get("id")
+        except Exception as e:
+            logger.warning(f"Failed to resolve task ref '{ref}': {e}")
+            return None
 
     async def _handle_mp_create_task(self, p) -> dict:
         """Create a task with fuzzy project matching, auto in-progress, and reminder."""

@@ -262,6 +262,17 @@ class MPPortalService:
             resp.raise_for_status()
             return resp.json()
 
+    async def resolve_task(self, ref: str) -> dict:
+        """Resolve a task by project_task_id (e.g. EL-0186) or title search."""
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.post(
+                f"{self.api_base}/tasks/resolve",
+                headers=self._headers(),
+                json={"ref": ref},
+            )
+            resp.raise_for_status()
+            return resp.json()
+
     async def get_task(self, task_id: int) -> dict:
         """Get a single task with full details."""
         async with httpx.AsyncClient(timeout=15) as client:
