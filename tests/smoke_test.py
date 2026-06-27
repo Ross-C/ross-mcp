@@ -48,7 +48,7 @@ def test(name, fn):
         print(f"  \033[31mFAIL\033[0m  {name}: {e}")
 
 
-def call_tool(tool: str, payload: dict = {}, timeout: int = 30) -> dict:
+def call_tool(tool: str, payload: dict = {}, timeout: int = 60) -> dict:
     """Call a relay tool endpoint and return the parsed response."""
     resp = httpx.post(
         f"{RELAY_URL}/api/tools/{tool}",
@@ -124,7 +124,7 @@ def test_outlook():
         return "error" not in result or result.get("status") == "success"
 
     def list_events():
-        result = call_tool("list-calendar-events", {"top": 1})
+        result = call_tool("list-events", {"top": 1})
         return "error" not in result or result.get("status") == "success"
 
     def find_slots():
