@@ -262,6 +262,25 @@ class MPPortalService:
             resp.raise_for_status()
             return resp.json()
 
+    async def get_task(self, task_id: int) -> dict:
+        """Get a single task with full details."""
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.get(f"{self.api_base}/tasks/{task_id}", headers=self._headers())
+            resp.raise_for_status()
+            return resp.json()
+
+    async def update_task(self, task_id: int, **kwargs) -> dict:
+        """Update task fields (hours, dates, description, etc.)."""
+        payload = {k: v for k, v in kwargs.items() if v is not None}
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.patch(
+                f"{self.api_base}/tasks/{task_id}",
+                headers=self._headers(),
+                json=payload,
+            )
+            resp.raise_for_status()
+            return resp.json()
+
     async def search_tasks(self, query: str) -> dict:
         """Search active tasks by title or task ID."""
         async with httpx.AsyncClient(timeout=15) as client:

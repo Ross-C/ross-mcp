@@ -693,6 +693,40 @@ async def mp_update_task_status(req: MPUpdateTaskStatusRequest, _=Depends(_get_a
     return await _run("mp_update_task_status", payload)
 
 
+class MPGetTaskRequest(BaseModel):
+    task_id: int = Field(description="The numeric task ID")
+
+
+@router.post("/mp-get-task", summary="Get full details of a task")
+async def mp_get_task(req: MPGetTaskRequest, _=Depends(_get_api_key)):
+    return await _run("mp_get_task", {"task_id": req.task_id})
+
+
+class MPUpdateTaskRequest(BaseModel):
+    task_id: int = Field(description="The numeric task ID")
+    hours_taken: float | None = Field(default=None, description="Hours spent on the task")
+    customer_due_date: str | None = Field(default=None, description="Due date YYYY-MM-DD")
+    chargeable: bool | None = Field(default=None, description="Whether billable")
+    title: str | None = Field(default=None, description="Updated title")
+    description: str | None = Field(default=None, description="Updated description")
+
+
+@router.post("/mp-update-task", summary="Update task fields like hours, due date, description")
+async def mp_update_task(req: MPUpdateTaskRequest, _=Depends(_get_api_key)):
+    payload: dict = {"task_id": req.task_id}
+    if req.hours_taken is not None:
+        payload["hours_taken"] = req.hours_taken
+    if req.customer_due_date is not None:
+        payload["customer_due_date"] = req.customer_due_date
+    if req.chargeable is not None:
+        payload["chargeable"] = req.chargeable
+    if req.title is not None:
+        payload["title"] = req.title
+    if req.description is not None:
+        payload["description"] = req.description
+    return await _run("mp_update_task", payload)
+
+
 class MPSearchTasksRequest(BaseModel):
     query: str = Field(description="Search term (matches title or task reference like ACME-0042)")
 

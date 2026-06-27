@@ -154,6 +154,8 @@ TASK_DESCRIPTIONS = {
     "mp_my_tasks": "Checking my tasks",
     "mp_overdue_tasks": "Checking overdue tasks",
     "mp_recent_tasks": "Checking recent tasks",
+    "mp_get_task": "Getting task details",
+    "mp_update_task": "Updating task",
     "update_agent": "Updating agent",
     "ping": "Ping",
 }

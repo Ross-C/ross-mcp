@@ -916,6 +916,51 @@ async def mp_update_task_status(
 
 
 @mcp.tool()
+async def mp_get_task(task_id: int) -> str:
+    """Get full details of a task by its numeric ID.
+
+    Args:
+        task_id: The numeric task ID (from search or create results)
+    """
+    result = await _send("mp_get_task", {"task_id": task_id})
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def mp_update_task(
+    task_id: int,
+    hours_taken: float | None = None,
+    customer_due_date: str | None = None,
+    chargeable: bool | None = None,
+    title: str | None = None,
+    description: str | None = None,
+) -> str:
+    """Update a task's fields (hours, due date, description, etc.). Use this to log hours on a task.
+
+    Args:
+        task_id: The numeric task ID
+        hours_taken: Hours spent on the task
+        customer_due_date: Due date in YYYY-MM-DD format
+        chargeable: Whether this task is billable
+        title: Updated task title
+        description: Updated task description
+    """
+    payload: dict = {"task_id": task_id}
+    if hours_taken is not None:
+        payload["hours_taken"] = hours_taken
+    if customer_due_date is not None:
+        payload["customer_due_date"] = customer_due_date
+    if chargeable is not None:
+        payload["chargeable"] = chargeable
+    if title is not None:
+        payload["title"] = title
+    if description is not None:
+        payload["description"] = description
+    result = await _send("mp_update_task", payload)
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
 async def mp_search_tasks(query: str) -> str:
     """Search active tasks in the MP Portal by title or task ID (e.g. 'ACME-0042').
 

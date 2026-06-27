@@ -68,6 +68,8 @@ from shared.messages import (
     MPDeleteAliasPayload,
     MPCreateTaskPayload,
     MPUpdateTaskStatusPayload,
+    MPGetTaskPayload,
+    MPUpdateTaskPayload,
     MPSearchTasksPayload,
     UpdateAgentPayload,
 )
@@ -175,6 +177,8 @@ class Agent:
                             CommandType.MP_MY_TASKS,
                             CommandType.MP_OVERDUE_TASKS,
                             CommandType.MP_RECENT_TASKS,
+                            CommandType.MP_GET_TASK,
+                            CommandType.MP_UPDATE_TASK,
                         ])
                     if self.enchant_cbs.is_configured:
                         capabilities.extend([
@@ -391,6 +395,17 @@ class Agent:
                     p = MPUpdateTaskStatusPayload(**cmd.payload)
                     result = await self.mp_portal.update_task_status(
                         task_id=p.task_id, status=p.status, chargeable=p.chargeable,
+                    )
+                case CommandType.MP_GET_TASK:
+                    p = MPGetTaskPayload(**cmd.payload)
+                    result = await self.mp_portal.get_task(task_id=p.task_id)
+                case CommandType.MP_UPDATE_TASK:
+                    p = MPUpdateTaskPayload(**cmd.payload)
+                    result = await self.mp_portal.update_task(
+                        task_id=p.task_id, hours_taken=p.hours_taken,
+                        production_hours=p.production_hours, customer_due_date=p.customer_due_date,
+                        chargeable=p.chargeable, title=p.title,
+                        non_technical_description=p.description,
                     )
                 case CommandType.MP_SEARCH_TASKS:
                     p = MPSearchTasksPayload(**cmd.payload)

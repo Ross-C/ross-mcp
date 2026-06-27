@@ -70,6 +70,8 @@ class CommandType(str, Enum):
     MP_MY_TASKS = "mp_my_tasks"
     MP_OVERDUE_TASKS = "mp_overdue_tasks"
     MP_RECENT_TASKS = "mp_recent_tasks"
+    MP_GET_TASK = "mp_get_task"
+    MP_UPDATE_TASK = "mp_update_task"
     # System
     UPDATE_AGENT = "update_agent"
     AGENT_STATUS = "agent_status"
@@ -349,6 +351,20 @@ class MPUpdateTaskStatusPayload(BaseModel):
     task_id: int
     status: str
     chargeable: bool | None = None
+
+
+class MPGetTaskPayload(BaseModel):
+    task_id: int
+
+
+class MPUpdateTaskPayload(BaseModel):
+    task_id: int
+    hours_taken: float | None = None
+    production_hours: float | None = None
+    customer_due_date: str | None = None
+    chargeable: bool | None = None
+    title: str | None = None
+    description: str | None = None
 
 
 class MPSearchTasksPayload(BaseModel):
