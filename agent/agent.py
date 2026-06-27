@@ -386,46 +386,7 @@ class Agent:
                     result = await self.mp_portal.delete_alias(alias_id=p.alias_id)
                 case CommandType.MP_CREATE_TASK:
                     p = MPCreateTaskPayload(**cmd.payload)
-                    # Resolve project by name if no ID given
-                    project_id = p.project_id
-                    project_name = None
-                    if not project_id and p.project_name:
-                        match_result = await self.mp_portal.find_project(p.project_name)
-                        if match_result.get("confidence") == "high":
-                            project_id = match_result["project_id"]
-                            project_name = match_result["project_name"]
-                        else:
-                            result = match_result
-                            break
-                    if not project_id:
-                        result = {"error": "No project_id or project_name provided"}
-                        break
-                    # Create the task
-                    task_result = await self.mp_portal.create_task(
-                        project_id=project_id, title=p.title,
-                        description=p.description, due_date=p.due_date,
-                        chargeable=p.chargeable, estimated_hours=p.estimated_hours,
-                    )
-                    # Auto-set to in-progress
-                    task_id = task_result.get("task", {}).get("id") or task_result.get("id")
-                    task_ref = task_result.get("task", {}).get("reference") or task_result.get("reference") or ""
-                    if task_id:
-                        try:
-                            await self.mp_portal.update_task_status(task_id=task_id, status="in_progress")
-                            task_result["status_set"] = "in_progress"
-                        except Exception as e:
-                            logger.warning(f"Failed to set task to in_progress: {e}")
-                    # Create reminder to upload files
-                    if task_id:
-                        try:
-                            reminder_title = f"Upload files for {task_ref or task_id}: {p.title}"
-                            self.reminders.create_reminder(title=reminder_title, list_name="Reminders")
-                            task_result["reminder_created"] = True
-                        except Exception as e:
-                            logger.warning(f"Failed to create upload reminder: {e}")
-                    if project_name:
-                        task_result["project_name"] = project_name
-                    result = task_result
+                    result = await self._handle_mp_create_task(p)
                 case CommandType.MP_UPDATE_TASK_STATUS:
                     p = MPUpdateTaskStatusPayload(**cmd.payload)
                     result = await self.mp_portal.update_task_status(
@@ -504,6 +465,53 @@ class Agent:
                 status=Status.ERROR,
                 error=str(e),
             )
+
+    async def _handle_mp_create_task(self, p) -> dict:
+        """Create a task with fuzzy project matching, auto in-progress, and reminder."""
+        project_id = p.project_id
+        project_name = None
+
+        # Resolve project by name if no ID given
+        if not project_id and p.project_name:
+            match_result = await self.mp_portal.find_project(p.project_name)
+            if match_result.get("confidence") == "high":
+                project_id = match_result["project_id"]
+                project_name = match_result["project_name"]
+            else:
+                return match_result
+
+        if not project_id:
+            return {"error": "No project_id or project_name provided"}
+
+        # Create the task
+        task_result = await self.mp_portal.create_task(
+            project_id=project_id, title=p.title,
+            description=p.description, due_date=p.due_date,
+            chargeable=p.chargeable, estimated_hours=p.estimated_hours,
+        )
+
+        # Auto-set to in-progress
+        task_id = task_result.get("task", {}).get("id") or task_result.get("id")
+        task_ref = task_result.get("task", {}).get("reference") or task_result.get("reference") or ""
+        if task_id:
+            try:
+                await self.mp_portal.update_task_status(task_id=task_id, status="in_progress")
+                task_result["status_set"] = "in_progress"
+            except Exception as e:
+                logger.warning(f"Failed to set task to in_progress: {e}")
+
+        # Create reminder to upload files
+        if task_id:
+            try:
+                reminder_title = f"Upload files for {task_ref or task_id}: {p.title}"
+                self.reminders.create_reminder(title=reminder_title, list_name="Reminders")
+                task_result["reminder_created"] = True
+            except Exception as e:
+                logger.warning(f"Failed to create upload reminder: {e}")
+
+        if project_name:
+            task_result["project_name"] = project_name
+        return task_result
 
     async def _self_update(self) -> dict:
         """Pull latest code from git, install deps, then schedule a restart."""
