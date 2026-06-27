@@ -30,3 +30,4 @@ Thumbs.db
 
 # Fly.io
 fly.toml.bak
+.mp_projects_cache.json
