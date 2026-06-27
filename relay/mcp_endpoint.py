@@ -806,6 +806,142 @@ async def list_note_folders() -> str:
     return json.dumps(result, indent=2)
 
 
+# --- MP Portal Tools (Development Task Management) ---
+
+
+@mcp.tool()
+async def mp_list_projects() -> str:
+    """List all projects in the MP Portal with id, name, prefix, and customer."""
+    result = await _send("mp_list_projects")
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def mp_match_project(alias: str) -> str:
+    """Match a project by folder name or alias. Use the current working directory name as the alias.
+
+    Args:
+        alias: Folder name or alias to match against projects
+    """
+    result = await _send("mp_match_project", {"alias": alias})
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def mp_list_aliases() -> str:
+    """List all saved project folder aliases."""
+    result = await _send("mp_list_aliases")
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def mp_save_alias(project_id: int, alias: str) -> str:
+    """Save a folder alias for a project so future tasks auto-match.
+
+    Args:
+        project_id: The project ID (from mp_list_projects or mp_match_project)
+        alias: The folder name to associate with this project
+    """
+    result = await _send("mp_save_alias", {"project_id": project_id, "alias": alias})
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def mp_delete_alias(alias_id: int) -> str:
+    """Delete a project folder alias.
+
+    Args:
+        alias_id: The alias ID to delete (from mp_list_aliases)
+    """
+    result = await _send("mp_delete_alias", {"alias_id": alias_id})
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def mp_create_task(
+    project_id: int,
+    title: str,
+    description: str | None = None,
+    due_date: str | None = None,
+    chargeable: bool = False,
+) -> str:
+    """Create a new development task on a project in the MP Portal.
+
+    Args:
+        project_id: The project ID (from mp_list_projects or mp_match_project)
+        title: Task title/description
+        description: Optional detailed description
+        due_date: Optional due date in YYYY-MM-DD format
+        chargeable: Whether this task is billable (default false)
+    """
+    payload: dict = {"project_id": project_id, "title": title, "chargeable": chargeable}
+    if description:
+        payload["description"] = description
+    if due_date:
+        payload["due_date"] = due_date
+    result = await _send("mp_create_task", payload)
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def mp_update_task_status(
+    task_id: int,
+    status: str,
+    chargeable: bool | None = None,
+) -> str:
+    """Update a task's status in the MP Portal. Use 'deployed' to mark as deployed (auto-fills dates for billing). Say 'deployed and bill it' to also set chargeable=true.
+
+    Args:
+        task_id: The task ID (numeric, from search/list results)
+        status: New status: in_progress, completed, or deployed
+        chargeable: Set to true to mark as billable (only relevant for deployed)
+    """
+    payload: dict = {"task_id": task_id, "status": status}
+    if chargeable is not None:
+        payload["chargeable"] = chargeable
+    result = await _send("mp_update_task_status", payload)
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def mp_search_tasks(query: str) -> str:
+    """Search active tasks in the MP Portal by title or task ID (e.g. 'ACME-0042').
+
+    Args:
+        query: Search term (matches title or task reference)
+    """
+    result = await _send("mp_search_tasks", {"query": query})
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def mp_in_progress_tasks() -> str:
+    """List all tasks currently in progress across all projects."""
+    result = await _send("mp_in_progress_tasks")
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def mp_my_tasks() -> str:
+    """Get outstanding tasks assigned to Ross. Use for 'what should I work on' or 'what's on my plate'."""
+    result = await _send("mp_my_tasks")
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def mp_overdue_tasks() -> str:
+    """Get tasks past their due date that haven't been deployed yet."""
+    result = await _send("mp_overdue_tasks")
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def mp_recent_tasks() -> str:
+    """Get recently created or updated tasks (last 7 days)."""
+    result = await _send("mp_recent_tasks")
+    return json.dumps(result, indent=2)
+
+
 # --- Agent Management Tools ---
 
 

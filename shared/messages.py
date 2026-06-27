@@ -57,6 +57,19 @@ class CommandType(str, Enum):
     RCSC_LIST_TICKETS = "rcsc_list_tickets"
     RCSC_GET_TICKET = "rcsc_get_ticket"
     RCSC_CLOSE_TICKET = "rcsc_close_ticket"
+    # MP Portal (Development Tasks)
+    MP_LIST_PROJECTS = "mp_list_projects"
+    MP_MATCH_PROJECT = "mp_match_project"
+    MP_LIST_ALIASES = "mp_list_aliases"
+    MP_SAVE_ALIAS = "mp_save_alias"
+    MP_DELETE_ALIAS = "mp_delete_alias"
+    MP_CREATE_TASK = "mp_create_task"
+    MP_UPDATE_TASK_STATUS = "mp_update_task_status"
+    MP_SEARCH_TASKS = "mp_search_tasks"
+    MP_IN_PROGRESS_TASKS = "mp_in_progress_tasks"
+    MP_MY_TASKS = "mp_my_tasks"
+    MP_OVERDUE_TASKS = "mp_overdue_tasks"
+    MP_RECENT_TASKS = "mp_recent_tasks"
     # System
     UPDATE_AGENT = "update_agent"
     AGENT_STATUS = "agent_status"
@@ -305,6 +318,39 @@ class RCSCGetTicketPayload(BaseModel):
 
 class RCSCCloseTicketPayload(BaseModel):
     ticket_id: str
+
+
+# --- MP Portal Payloads ---
+
+class MPMatchProjectPayload(BaseModel):
+    alias: str
+
+
+class MPSaveAliasPayload(BaseModel):
+    project_id: int
+    alias: str
+
+
+class MPDeleteAliasPayload(BaseModel):
+    alias_id: int
+
+
+class MPCreateTaskPayload(BaseModel):
+    project_id: int
+    title: str
+    description: str | None = None
+    due_date: str | None = None
+    chargeable: bool = False
+
+
+class MPUpdateTaskStatusPayload(BaseModel):
+    task_id: int
+    status: str
+    chargeable: bool | None = None
+
+
+class MPSearchTasksPayload(BaseModel):
+    query: str
 
 
 class UpdateAgentPayload(BaseModel):

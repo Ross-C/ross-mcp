@@ -63,6 +63,12 @@ from shared.messages import (
     RCSCListTicketsPayload,
     RCSCGetTicketPayload,
     RCSCCloseTicketPayload,
+    MPMatchProjectPayload,
+    MPSaveAliasPayload,
+    MPDeleteAliasPayload,
+    MPCreateTaskPayload,
+    MPUpdateTaskStatusPayload,
+    MPSearchTasksPayload,
     UpdateAgentPayload,
 )
 from agent.services.reminders import RemindersService
@@ -76,6 +82,7 @@ from agent.services.voice_memos import VoiceMemosService
 from agent.services.documents import DocumentService
 from agent.services.enchant_cbs import EnchantCBSService
 from agent.services.enchant_rcsc import EnchantRCSCService
+from agent.services.mp_portal import MPPortalService
 
 load_dotenv()
 LOG_DIR = Path.home() / "Library/Logs/mcp-agent"
@@ -106,6 +113,7 @@ class Agent:
         self.documents = DocumentService()
         self.enchant_cbs = EnchantCBSService()
         self.enchant_rcsc = EnchantRCSCService()
+        self.mp_portal = MPPortalService()
         self._running = True
         self._version = self._get_git_version()
 
@@ -153,6 +161,21 @@ class Agent:
                         CommandType.UPDATE_AGENT,
                     CommandType.PING,
                     ]
+                    if self.mp_portal.is_configured:
+                        capabilities.extend([
+                            CommandType.MP_LIST_PROJECTS,
+                            CommandType.MP_MATCH_PROJECT,
+                            CommandType.MP_LIST_ALIASES,
+                            CommandType.MP_SAVE_ALIAS,
+                            CommandType.MP_DELETE_ALIAS,
+                            CommandType.MP_CREATE_TASK,
+                            CommandType.MP_UPDATE_TASK_STATUS,
+                            CommandType.MP_SEARCH_TASKS,
+                            CommandType.MP_IN_PROGRESS_TASKS,
+                            CommandType.MP_MY_TASKS,
+                            CommandType.MP_OVERDUE_TASKS,
+                            CommandType.MP_RECENT_TASKS,
+                        ])
                     if self.enchant_cbs.is_configured:
                         capabilities.extend([
                             CommandType.CBS_LIST_TICKETS,
@@ -347,6 +370,42 @@ class Agent:
                 case CommandType.RCSC_CLOSE_TICKET:
                     p = RCSCCloseTicketPayload(**cmd.payload)
                     result = await self.enchant_rcsc.close_ticket(ticket_id=p.ticket_id)
+                # --- MP Portal ---
+                case CommandType.MP_LIST_PROJECTS:
+                    result = await self.mp_portal.list_projects()
+                case CommandType.MP_MATCH_PROJECT:
+                    p = MPMatchProjectPayload(**cmd.payload)
+                    result = await self.mp_portal.match_project(alias=p.alias)
+                case CommandType.MP_LIST_ALIASES:
+                    result = await self.mp_portal.list_aliases()
+                case CommandType.MP_SAVE_ALIAS:
+                    p = MPSaveAliasPayload(**cmd.payload)
+                    result = await self.mp_portal.save_alias(project_id=p.project_id, alias=p.alias)
+                case CommandType.MP_DELETE_ALIAS:
+                    p = MPDeleteAliasPayload(**cmd.payload)
+                    result = await self.mp_portal.delete_alias(alias_id=p.alias_id)
+                case CommandType.MP_CREATE_TASK:
+                    p = MPCreateTaskPayload(**cmd.payload)
+                    result = await self.mp_portal.create_task(
+                        project_id=p.project_id, title=p.title,
+                        description=p.description, due_date=p.due_date, chargeable=p.chargeable,
+                    )
+                case CommandType.MP_UPDATE_TASK_STATUS:
+                    p = MPUpdateTaskStatusPayload(**cmd.payload)
+                    result = await self.mp_portal.update_task_status(
+                        task_id=p.task_id, status=p.status, chargeable=p.chargeable,
+                    )
+                case CommandType.MP_SEARCH_TASKS:
+                    p = MPSearchTasksPayload(**cmd.payload)
+                    result = await self.mp_portal.search_tasks(query=p.query)
+                case CommandType.MP_IN_PROGRESS_TASKS:
+                    result = await self.mp_portal.get_in_progress_tasks()
+                case CommandType.MP_MY_TASKS:
+                    result = await self.mp_portal.get_my_tasks()
+                case CommandType.MP_OVERDUE_TASKS:
+                    result = await self.mp_portal.get_overdue_tasks()
+                case CommandType.MP_RECENT_TASKS:
+                    result = await self.mp_portal.get_recent_tasks()
                 # --- Documents ---
                 case CommandType.CONVERT_MD_TO_PDF:
                     p = ConvertDocumentPayload(**cmd.payload)

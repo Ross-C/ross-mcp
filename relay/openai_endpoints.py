@@ -613,6 +613,110 @@ async def lookup_contact(req: LookupContactRequest, _=Depends(_get_api_key)):
 
 
 # =====================
+# MP Portal (Development Tasks)
+# =====================
+
+
+@router.post("/mp-list-projects", summary="List all projects in the MP Portal")
+async def mp_list_projects(_=Depends(_get_api_key)):
+    return await _run("mp_list_projects")
+
+
+class MPMatchProjectRequest(BaseModel):
+    alias: str = Field(description="Folder name or alias to match against projects")
+
+
+@router.post("/mp-match-project", summary="Match a project by folder name or alias")
+async def mp_match_project(req: MPMatchProjectRequest, _=Depends(_get_api_key)):
+    return await _run("mp_match_project", {"alias": req.alias})
+
+
+@router.post("/mp-list-aliases", summary="List all saved project folder aliases")
+async def mp_list_aliases(_=Depends(_get_api_key)):
+    return await _run("mp_list_aliases")
+
+
+class MPSaveAliasRequest(BaseModel):
+    project_id: int = Field(description="The project ID")
+    alias: str = Field(description="The folder name to associate with this project")
+
+
+@router.post("/mp-save-alias", summary="Save a folder alias for a project")
+async def mp_save_alias(req: MPSaveAliasRequest, _=Depends(_get_api_key)):
+    return await _run("mp_save_alias", {"project_id": req.project_id, "alias": req.alias})
+
+
+class MPDeleteAliasRequest(BaseModel):
+    alias_id: int = Field(description="The alias ID to delete")
+
+
+@router.post("/mp-delete-alias", summary="Delete a project folder alias")
+async def mp_delete_alias(req: MPDeleteAliasRequest, _=Depends(_get_api_key)):
+    return await _run("mp_delete_alias", {"alias_id": req.alias_id})
+
+
+class MPCreateTaskRequest(BaseModel):
+    project_id: int = Field(description="The project ID")
+    title: str = Field(description="Task title")
+    description: str | None = Field(default=None, description="Detailed description")
+    due_date: str | None = Field(default=None, description="Due date in YYYY-MM-DD format")
+    chargeable: bool = Field(default=False, description="Whether this task is billable")
+
+
+@router.post("/mp-create-task", summary="Create a new development task on a project")
+async def mp_create_task(req: MPCreateTaskRequest, _=Depends(_get_api_key)):
+    payload: dict = {"project_id": req.project_id, "title": req.title, "chargeable": req.chargeable}
+    if req.description:
+        payload["description"] = req.description
+    if req.due_date:
+        payload["due_date"] = req.due_date
+    return await _run("mp_create_task", payload)
+
+
+class MPUpdateTaskStatusRequest(BaseModel):
+    task_id: int = Field(description="The task ID")
+    status: str = Field(description="New status: in_progress, completed, or deployed")
+    chargeable: bool | None = Field(default=None, description="Set true to mark as billable (for deployed)")
+
+
+@router.post("/mp-update-task-status", summary="Update a task's status (in_progress, completed, deployed)")
+async def mp_update_task_status(req: MPUpdateTaskStatusRequest, _=Depends(_get_api_key)):
+    payload: dict = {"task_id": req.task_id, "status": req.status}
+    if req.chargeable is not None:
+        payload["chargeable"] = req.chargeable
+    return await _run("mp_update_task_status", payload)
+
+
+class MPSearchTasksRequest(BaseModel):
+    query: str = Field(description="Search term (matches title or task reference like ACME-0042)")
+
+
+@router.post("/mp-search-tasks", summary="Search active tasks by title or task ID")
+async def mp_search_tasks(req: MPSearchTasksRequest, _=Depends(_get_api_key)):
+    return await _run("mp_search_tasks", {"query": req.query})
+
+
+@router.post("/mp-in-progress-tasks", summary="List all tasks currently in progress")
+async def mp_in_progress_tasks(_=Depends(_get_api_key)):
+    return await _run("mp_in_progress_tasks")
+
+
+@router.post("/mp-my-tasks", summary="Get outstanding tasks assigned to Ross")
+async def mp_my_tasks(_=Depends(_get_api_key)):
+    return await _run("mp_my_tasks")
+
+
+@router.post("/mp-overdue-tasks", summary="Get tasks past their due date")
+async def mp_overdue_tasks(_=Depends(_get_api_key)):
+    return await _run("mp_overdue_tasks")
+
+
+@router.post("/mp-recent-tasks", summary="Get recently created or updated tasks")
+async def mp_recent_tasks(_=Depends(_get_api_key)):
+    return await _run("mp_recent_tasks")
+
+
+# =====================
 # Agent Management
 # =====================
 
