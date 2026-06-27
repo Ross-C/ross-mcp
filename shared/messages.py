@@ -49,6 +49,13 @@ class CommandType(str, Enum):
     GMAIL_CREATE_DRAFT = "gmail_create_draft"
     GMAIL_ARCHIVE = "gmail_archive"
     GMAIL_LIST_LABELS = "gmail_list_labels"
+    # Google Calendar
+    GCAL_LIST_EVENTS = "gcal_list_events"
+    GCAL_CREATE_EVENT = "gcal_create_event"
+    # iCloud Calendar (personal)
+    ICAL_LIST_CALENDARS = "ical_list_calendars"
+    ICAL_LIST_EVENTS = "ical_list_events"
+    ICAL_CREATE_EVENT = "ical_create_event"
     # CBS Support (Enchant)
     CBS_LIST_TICKETS = "cbs_list_tickets"
     CBS_GET_TICKET = "cbs_get_ticket"
@@ -290,6 +297,44 @@ class GmailCreateDraftPayload(BaseModel):
 class GmailArchivePayload(BaseModel):
     message_id: str
 
+
+# --- Google Calendar Payloads ---
+
+class GCalListEventsPayload(BaseModel):
+    start: datetime | None = None
+    end: datetime | None = None
+    top: int = 20
+
+
+class GCalCreateEventPayload(BaseModel):
+    subject: str
+    start: datetime
+    end: datetime
+    location: str | None = None
+    body: str | None = None
+    attendees: list[str] | None = None
+    is_all_day: bool = False
+    timezone_name: str = "Europe/London"
+
+
+# --- iCloud Calendar Payloads ---
+
+class ICalListEventsPayload(BaseModel):
+    start: datetime | None = None
+    end: datetime | None = None
+    calendar_name: str | None = None
+    top: int = 50
+
+
+class ICalCreateEventPayload(BaseModel):
+    title: str
+    start: datetime
+    end: datetime
+    calendar_name: str | None = None
+    location: str | None = None
+    notes: str | None = None
+    is_all_day: bool = False
+    timezone_name: str = "Europe/London"
 
 
 # --- CBS Support (Enchant) Payloads ---

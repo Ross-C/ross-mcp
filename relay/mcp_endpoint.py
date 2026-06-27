@@ -59,7 +59,8 @@ RELAY_HOST = os.getenv("RELAY_PUBLIC_HOST", "ross-mcp-relay.fly.dev")
 mcp = FastMCP(
     "Ross Life Admin",
     instructions=(
-        "Manage Apple Reminders, Outlook Email & Calendar via local Mac agents.\n\n"
+        "Manage Apple Reminders, Outlook Email & Calendar, Gmail, Google Calendar, "
+        "iCloud Calendar (personal), support tickets, and development tasks via local Mac agents.\n\n"
         "EMAIL STYLE (applies to ALL drafts and replies):\n"
         "- Always enrich and polish what the user asks for. Never parrot their words back verbatim. "
         "Take the intent and key points, then write a well-worded, natural email that sounds like "
@@ -539,47 +540,212 @@ async def add_email_attachment(
     return json.dumps(result, indent=2)
 
 
-# --- Gmail Tools (disabled until Google OAuth is configured) ---
-# Uncomment these when GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are set in .env
+# --- Gmail Tools ---
 
-# @mcp.tool()
-# async def gmail_search(query: str, max_results: int = 10) -> str:
-#     """Search Gmail emails. Uses Gmail search syntax (e.g. 'from:someone subject:hello')."""
-#     result = await _send("gmail_search", {"query": query, "max_results": max_results})
-#     return json.dumps(result, indent=2)
 
-# @mcp.tool()
-# async def gmail_get_email(message_id: str) -> str:
-#     """Get full content of a Gmail email by ID."""
-#     result = await _send("gmail_get_email", {"message_id": message_id})
-#     return json.dumps(result, indent=2)
+@mcp.tool()
+async def gmail_search(query: str, max_results: int = 10) -> str:
+    """Search Gmail emails. Uses Gmail search syntax (e.g. 'from:someone subject:hello is:unread').
 
-# @mcp.tool()
-# async def gmail_get_thread(thread_id: str) -> str:
-#     """Get all emails in a Gmail thread."""
-#     result = await _send("gmail_get_thread", {"thread_id": thread_id})
-#     return json.dumps(result, indent=2)
+    Args:
+        query: Gmail search query
+        max_results: Max results to return (default 10)
+    """
+    result = await _send("gmail_search", {"query": query, "max_results": max_results})
+    return json.dumps(result, indent=2)
 
-# @mcp.tool()
-# async def gmail_create_draft(subject: str, body: str, to: list[str], cc: list[str] | None = None, body_type: str = "html") -> str:
-#     """Create a Gmail email draft. Does NOT send."""
-#     payload: dict = {"subject": subject, "body": body, "to": to, "body_type": body_type}
-#     if cc: payload["cc"] = cc
-#     result = await _send("gmail_create_draft", payload)
-#     return json.dumps(result, indent=2)
 
-# @mcp.tool()
-# async def gmail_archive(message_id: str) -> str:
-#     """Archive a Gmail email (remove from Inbox)."""
-#     result = await _send("gmail_archive", {"message_id": message_id})
-#     return json.dumps(result, indent=2)
+@mcp.tool()
+async def gmail_get_email(message_id: str) -> str:
+    """Get full content of a Gmail email by ID.
 
-# @mcp.tool()
-# async def gmail_list_labels() -> str:
-#     """List all Gmail labels."""
-#     result = await _send("gmail_list_labels")
-#     return json.dumps(result, indent=2)
+    Args:
+        message_id: The Gmail message ID (from gmail_search)
+    """
+    result = await _send("gmail_get_email", {"message_id": message_id})
+    return json.dumps(result, indent=2)
 
+
+@mcp.tool()
+async def gmail_get_thread(thread_id: str) -> str:
+    """Get all emails in a Gmail thread.
+
+    Args:
+        thread_id: The Gmail thread ID (from gmail_get_email)
+    """
+    result = await _send("gmail_get_thread", {"thread_id": thread_id})
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def gmail_create_draft(
+    subject: str,
+    body: str,
+    to: list[str],
+    cc: list[str] | None = None,
+    body_type: str = "html",
+) -> str:
+    """Create a Gmail email draft. Does NOT send.
+
+    Args:
+        subject: Email subject
+        body: Email body
+        to: List of recipient email addresses
+        cc: Optional list of CC addresses
+        body_type: Content type — html (default) or plain
+    """
+    payload: dict = {"subject": subject, "body": body, "to": to, "body_type": body_type}
+    if cc:
+        payload["cc"] = cc
+    result = await _send("gmail_create_draft", payload)
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def gmail_archive(message_id: str) -> str:
+    """Archive a Gmail email (remove from Inbox).
+
+    Args:
+        message_id: The Gmail message ID to archive
+    """
+    result = await _send("gmail_archive", {"message_id": message_id})
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def gmail_list_labels() -> str:
+    """List all Gmail labels."""
+    result = await _send("gmail_list_labels")
+    return json.dumps(result, indent=2)
+
+
+# --- Google Calendar Tools ---
+
+
+@mcp.tool()
+async def gcal_list_events(
+    start: str | None = None,
+    end: str | None = None,
+    top: int = 20,
+) -> str:
+    """List Google Calendar events. Defaults to next 7 days if no range given.
+
+    Args:
+        start: Start date in ISO format (e.g. 2026-06-24T00:00:00)
+        end: End date in ISO format
+        top: Max events to return (default 20)
+    """
+    payload: dict = {"top": top}
+    if start:
+        payload["start"] = start
+    if end:
+        payload["end"] = end
+    result = await _send("gcal_list_events", payload)
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def gcal_create_event(
+    subject: str,
+    start: str,
+    end: str,
+    location: str | None = None,
+    body: str | None = None,
+    attendees: list[str] | None = None,
+    is_all_day: bool = False,
+    timezone_name: str = "Europe/London",
+) -> str:
+    """Create a Google Calendar event.
+
+    Args:
+        subject: Event title
+        start: Start time in ISO format (e.g. 2026-06-25T14:00:00)
+        end: End time in ISO format (e.g. 2026-06-25T15:00:00)
+        location: Optional location
+        body: Optional description
+        attendees: Optional list of attendee email addresses
+        is_all_day: Whether this is an all-day event
+        timezone_name: Timezone (default Europe/London)
+    """
+    payload: dict = {"subject": subject, "start": start, "end": end, "timezone_name": timezone_name, "is_all_day": is_all_day}
+    if location:
+        payload["location"] = location
+    if body:
+        payload["body"] = body
+    if attendees:
+        payload["attendees"] = attendees
+    result = await _send("gcal_create_event", payload)
+    return json.dumps(result, indent=2)
+
+
+# --- iCloud Calendar Tools (Personal Calendar) ---
+
+
+@mcp.tool()
+async def ical_list_calendars() -> str:
+    """List all available iCloud/Apple calendars on the Mac."""
+    result = await _send("ical_list_calendars")
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def ical_list_events(
+    start: str | None = None,
+    end: str | None = None,
+    calendar_name: str | None = None,
+    top: int = 50,
+) -> str:
+    """List events from Ross's personal iCloud calendar. Use when asked about personal events, birthdays, or holidays. Defaults to next 7 days if no range given.
+
+    Args:
+        start: Start date in ISO format (e.g. 2026-06-24T00:00:00)
+        end: End date in ISO format
+        calendar_name: Optional calendar name filter (e.g. 'Personal', 'Home')
+        top: Max events to return (default 50)
+    """
+    payload: dict = {"top": top}
+    if start:
+        payload["start"] = start
+    if end:
+        payload["end"] = end
+    if calendar_name:
+        payload["calendar_name"] = calendar_name
+    result = await _send("ical_list_events", payload)
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def ical_create_event(
+    title: str,
+    start: str,
+    end: str,
+    calendar_name: str | None = None,
+    location: str | None = None,
+    notes: str | None = None,
+    is_all_day: bool = False,
+    timezone_name: str = "Europe/London",
+) -> str:
+    """Create an event on Ross's personal iCloud calendar. Use for personal events, birthdays, holidays.
+
+    Args:
+        title: Event title
+        start: Start time in ISO format (e.g. 2026-06-25T14:00:00)
+        end: End time in ISO format (e.g. 2026-06-25T15:00:00)
+        calendar_name: Which calendar to create on (defaults to the Mac's default calendar)
+        location: Optional location
+        notes: Optional notes/description
+        is_all_day: Whether this is an all-day event (use for birthdays)
+        timezone_name: Timezone (default Europe/London)
+    """
+    payload: dict = {"title": title, "start": start, "end": end, "is_all_day": is_all_day, "timezone_name": timezone_name}
+    if calendar_name:
+        payload["calendar_name"] = calendar_name
+    if location:
+        payload["location"] = location
+    if notes:
+        payload["notes"] = notes
+    result = await _send("ical_create_event", payload)
+    return json.dumps(result, indent=2)
 
 
 # --- Support Ticket Tools (read-only) ---
