@@ -241,6 +241,22 @@ def test_mp_portal():
         result = call_tool("mp-search-tasks", {"query": "test"})
         return "error" not in result
 
+    def outstanding_summary():
+        result = call_tool("mp-outstanding-summary", {})
+        return "total_outstanding" in result
+
+    def outstanding_by_project():
+        result = call_tool("mp-outstanding-by-project", {})
+        return "projects" in result and isinstance(result["projects"], list)
+
+    def billable_summary():
+        result = call_tool("mp-billable-summary", {})
+        return "total_outstanding_gbp" in result
+
+    def activity_recent():
+        result = call_tool("mp-activity-recent", {})
+        return "events" in result and isinstance(result["events"], list)
+
     test("Portal API responds directly", portal_api_direct)
     test("List projects via relay", list_projects)
     test("Fuzzy match 'ACHL' → ACHL Portal", match_project)
@@ -250,10 +266,94 @@ def test_mp_portal():
     test("Overdue tasks", overdue_tasks)
     test("Recent tasks", recent_tasks)
     test("Search tasks", search_tasks)
+    test("Outstanding summary", outstanding_summary)
+    test("Outstanding by project", outstanding_by_project)
+    test("Billable summary", billable_summary)
+    test("Recent activity", activity_recent)
 
 
 # ==========================================
-# 7. ELEVENLABS VOICE AGENT
+# 7. iCLOUD CALENDAR
+# ==========================================
+
+def test_ical():
+    print("\n--- iCloud Calendar ---")
+
+    def ical_list_calendars():
+        result = call_tool("ical-list-calendars", {})
+        data = result if isinstance(result, dict) else {}
+        return data.get("status") == "success" or "calendars" in data or "error" not in data
+
+    def ical_list_events():
+        result = call_tool("ical-list-events", {})
+        data = result if isinstance(result, dict) else {}
+        return data.get("status") == "success" or "events" in data or "error" not in data
+
+    test("iCloud list calendars", ical_list_calendars)
+    test("iCloud list events", ical_list_events)
+
+
+# ==========================================
+# 8. AGENT CAPABILITY COMPLETENESS
+# ==========================================
+
+EXPECTED_CAPABILITIES = {
+    "both": [
+        "create_reminder", "list_reminders", "complete_reminder",
+        "convert_md_to_pdf", "convert_md_to_docx",
+        "list_recordings", "transcribe_recording",
+        "search_notes", "get_note", "create_note", "list_note_folders",
+        "update_agent", "ping",
+        "mp_list_projects", "mp_match_project", "mp_list_aliases",
+        "mp_save_alias", "mp_delete_alias", "mp_create_task",
+        "mp_update_task_status", "mp_search_tasks", "mp_in_progress_tasks",
+        "mp_my_tasks", "mp_overdue_tasks", "mp_recent_tasks",
+        "mp_get_task", "mp_update_task",
+        "mp_outstanding_summary", "mp_outstanding_by_project",
+        "mp_billable_summary", "mp_activity_recent",
+        "cbs_list_tickets", "cbs_get_ticket", "cbs_close_ticket",
+        "rcsc_list_tickets", "rcsc_get_ticket", "rcsc_close_ticket",
+        "search_emails", "get_email", "get_thread",
+        "create_draft", "draft_reply", "update_draft", "send_draft",
+        "send_email", "schedule_send", "cancel_scheduled_send",
+        "archive_email", "add_attachment",
+        "list_events", "create_event", "update_event", "cancel_event",
+        "find_available_slots",
+    ],
+}
+
+def test_capability_completeness():
+    print("\n--- Capability Completeness ---")
+
+    resp = httpx.get(f"{RELAY_URL}/api/status", headers=relay_headers(), timeout=10)
+    agents = resp.json().get("agents", {})
+
+    for agent_name, agent_data in agents.items():
+        caps = set(agent_data.get("capabilities", []))
+        expected = set(EXPECTED_CAPABILITIES["both"])
+        missing = expected - caps
+        extra = caps - expected
+
+        def check_caps(m=missing):
+            if m:
+                print(f"           Missing: {', '.join(sorted(m))}")
+            return len(m) == 0
+
+        test(f"{agent_name} has all expected capabilities", check_caps)
+
+        if extra:
+            # Not a failure, just informational
+            known_extras = {"ical_list_calendars", "ical_list_events", "ical_create_event",
+                           "gmail_search", "gmail_get_email", "gmail_get_thread",
+                           "gmail_create_draft", "gmail_archive", "gmail_list_labels",
+                           "gcal_list_events", "gcal_create_event"}
+            unexpected = extra - known_extras
+            if unexpected:
+                print(f"           Extra (unexpected): {', '.join(sorted(unexpected))}")
+
+
+# ==========================================
+# 9. ELEVENLABS VOICE AGENT
 # ==========================================
 
 def test_elevenlabs():
@@ -273,9 +373,10 @@ def test_elevenlabs():
         resp.raise_for_status()
         data = resp.json()
         tool_ids = data["conversation_config"]["agent"]["prompt"]["tool_ids"]
-        return len(tool_ids) >= 30  # We have 35 expected
+        return len(tool_ids) >= 38  # We have 41 expected
 
-    def mp_tools_present():
+    def all_tools_valid():
+        """Fetch every tool ID and check it resolves + has a valid webhook URL."""
         resp = httpx.get(
             f"https://api.elevenlabs.io/v1/convai/agents/{AGENT_ID}",
             headers={"xi-api-key": ELEVENLABS_KEY},
@@ -283,8 +384,7 @@ def test_elevenlabs():
         )
         data = resp.json()
         tool_ids = data["conversation_config"]["agent"]["prompt"]["tool_ids"]
-        # Check each MP tool exists by fetching its config
-        mp_count = 0
+        broken = []
         for tid in tool_ids:
             try:
                 tresp = httpx.get(
@@ -293,15 +393,57 @@ def test_elevenlabs():
                     timeout=10,
                 )
                 tdata = tresp.json()
-                name = tdata.get("tool_config", {}).get("name", "")
-                if name.startswith("mp-"):
-                    mp_count += 1
+                name = tdata.get("tool_config", {}).get("name", "unnamed")
+                url = tdata.get("tool_config", {}).get("api_schema", {}).get("url", "")
+                if not url.startswith("https://ross-mcp-relay.fly.dev/"):
+                    broken.append(f"{name}: bad URL")
+            except Exception as e:
+                broken.append(f"{tid}: {e}")
+        if broken:
+            for b in broken:
+                print(f"           {b}")
+        return len(broken) == 0
+
+    EXPECTED_EL_TOOLS = [
+        "mp-outstanding-summary", "mp-outstanding-by-project",
+        "mp-billable-summary", "mp-activity-recent",
+        "mp-list-projects", "mp-match-project", "mp-list-aliases",
+        "mp-save-alias", "mp-delete-alias", "mp-create-task",
+        "mp-update-task-status", "mp-search-tasks", "mp-in-progress-tasks",
+        "mp-my-tasks", "mp-overdue-tasks", "mp-recent-tasks",
+        "mp-get-task", "mp-update-task",
+        "cbs-list-tickets", "cbs-get-ticket", "cbs-close-ticket",
+        "rcsc-list-tickets", "rcsc-get-ticket", "rcsc-close-ticket",
+    ]
+
+    def expected_tools_present():
+        resp = httpx.get(
+            f"https://api.elevenlabs.io/v1/convai/agents/{AGENT_ID}",
+            headers={"xi-api-key": ELEVENLABS_KEY},
+            timeout=15,
+        )
+        data = resp.json()
+        tool_ids = data["conversation_config"]["agent"]["prompt"]["tool_ids"]
+        found_names = set()
+        for tid in tool_ids:
+            try:
+                tresp = httpx.get(
+                    f"https://api.elevenlabs.io/v1/convai/tools/{tid}",
+                    headers={"xi-api-key": ELEVENLABS_KEY},
+                    timeout=10,
+                )
+                tdata = tresp.json()
+                found_names.add(tdata.get("tool_config", {}).get("name", ""))
             except Exception:
                 pass
-        return mp_count >= 10  # We have 12 MP tools
+        missing = [t for t in EXPECTED_EL_TOOLS if t not in found_names]
+        if missing:
+            print(f"           Missing: {', '.join(missing)}")
+        return len(missing) == 0
 
-    test("ElevenLabs agent has 30+ tools", tools_registered)
-    test("MP Portal tools registered on voice agent", mp_tools_present)
+    test(f"ElevenLabs agent has 38+ tools", tools_registered)
+    test("All ElevenLabs tools resolve with valid URLs", all_tools_valid)
+    test("All expected tools present on voice agent", expected_tools_present)
 
 
 # ==========================================
@@ -325,6 +467,8 @@ def main():
     test_notes()
     test_enchant()
     test_mp_portal()
+    test_ical()
+    test_capability_completeness()
     test_elevenlabs()
 
     elapsed = time.time() - start
