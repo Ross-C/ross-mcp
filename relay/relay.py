@@ -232,19 +232,11 @@ class CommandRequest(BaseModel):
     payload: dict = {}
 
 
-async def execute_command(command_type: CommandType, payload: dict) -> dict:
-    """Route a command to an agent and return the response dict.
+async def _try_agent(agent_id: str, agent: ConnectedAgent, command_type: CommandType, payload: dict) -> dict:
+    """Send a command to a specific agent and return the response dict.
 
-    Shared by the HTTP API and the MCP endpoint.
-    Raises HTTPException on failure.
+    Raises asyncio.TimeoutError or Exception on failure.
     """
-    if not agents:
-        raise HTTPException(status_code=503, detail="No agents connected")
-
-    # Pick first available agent (later: smarter routing)
-    agent_id = next(iter(agents))
-    agent = agents[agent_id]
-
     cmd = Command(
         id=str(uuid.uuid4()),
         type=command_type,
@@ -263,11 +255,9 @@ async def execute_command(command_type: CommandType, payload: dict) -> dict:
             "status": "running",
         }
         await agent.ws.send_text(cmd.model_dump_json())
-        # Notes and transcription can take longer than 30s
         slow_commands = {"search_notes", "get_note", "transcribe_recording"}
         timeout = 60 if command_type.value in slow_commands else 30
         response = await asyncio.wait_for(future, timeout=timeout)
-        # Mark as done but keep visible for dashboard to catch
         agent.current_task = {
             **agent.current_task,
             "status": "done",
@@ -284,7 +274,6 @@ async def execute_command(command_type: CommandType, payload: dict) -> dict:
         if len(command_log) > MAX_LOG_SIZE:
             command_log.pop(0)
 
-        # Record stats for dashboard
         from relay.dashboard import record_command, record_update
         record_command(
             command_type=command_type.value,
@@ -293,7 +282,6 @@ async def execute_command(command_type: CommandType, payload: dict) -> dict:
             error=response.error,
         )
 
-        # Log agent self-updates
         if command_type == CommandType.UPDATE_AGENT and response.status.value == "success":
             git_msg = response.data.get("git", "")
             record_update(agent_id, f"Agent self-updated: {git_msg}")
@@ -313,7 +301,7 @@ async def execute_command(command_type: CommandType, payload: dict) -> dict:
             status="error",
             error="Agent did not respond in time",
         )
-        raise HTTPException(status_code=504, detail="Agent did not respond in time")
+        raise
     except Exception:
         if agent.current_task:
             agent.current_task = {
@@ -324,6 +312,63 @@ async def execute_command(command_type: CommandType, payload: dict) -> dict:
         raise
     finally:
         agent.pending_responses.pop(cmd.id, None)
+
+
+# Preferred agent order — mac-mini is always-on primary, macbook-pro as fallback
+PREFERRED_AGENTS = ["mac-mini", "macbook-pro"]
+
+
+async def execute_command(command_type: CommandType, payload: dict) -> dict:
+    """Route a command to a capable agent and return the response dict.
+
+    Selects agents that registered the requested capability, tries them
+    in preferred order, and fails over to the next if one times out.
+    Shared by the HTTP API and the MCP endpoint.
+    Raises HTTPException on failure.
+    """
+    if not agents:
+        raise HTTPException(status_code=503, detail="No agents connected")
+
+    # Build ordered list of capable agents
+    capable = []
+    for name in PREFERRED_AGENTS:
+        if name in agents and command_type in agents[name].registration.capabilities:
+            capable.append(name)
+    # Add any other connected agents not in the preferred list
+    for name in agents:
+        if name not in capable and command_type in agents[name].registration.capabilities:
+            capable.append(name)
+
+    # If no agent has the capability, fall back to all agents (system commands like ping)
+    if not capable:
+        for name in PREFERRED_AGENTS:
+            if name in agents:
+                capable.append(name)
+        for name in agents:
+            if name not in capable:
+                capable.append(name)
+
+    if not capable:
+        raise HTTPException(status_code=503, detail="No agents connected")
+
+    last_error = None
+    for agent_id in capable:
+        agent = agents.get(agent_id)
+        if not agent:
+            continue
+        try:
+            logger.info(f"Routing {command_type.value} to {agent_id}")
+            return await _try_agent(agent_id, agent, command_type, payload)
+        except asyncio.TimeoutError:
+            last_error = f"Agent {agent_id} did not respond in time"
+            logger.warning(f"{last_error}, trying next agent...")
+            continue
+        except Exception as e:
+            last_error = str(e)
+            logger.warning(f"Agent {agent_id} failed: {last_error}, trying next agent...")
+            continue
+
+    raise HTTPException(status_code=504, detail=last_error or "All agents failed to respond")
 
 
 @app.post("/api/command", include_in_schema=False)

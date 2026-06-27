@@ -228,7 +228,8 @@ class Agent:
             match cmd.type:
                 case CommandType.CREATE_REMINDER:
                     payload = CreateReminderPayload(**cmd.payload)
-                    result = self.reminders.create_reminder(
+                    result = await asyncio.to_thread(
+                        self.reminders.create_reminder,
                         title=payload.title,
                         notes=payload.notes,
                         due_date=payload.due_date,
@@ -237,14 +238,16 @@ class Agent:
                     )
                 case CommandType.LIST_REMINDERS:
                     payload = ListRemindersPayload(**cmd.payload)
-                    result = self.reminders.list_reminders(
+                    result = await asyncio.to_thread(
+                        self.reminders.list_reminders,
                         list_name=payload.list_name,
                         include_completed=payload.include_completed,
                     )
                     result = {"reminders": result}
                 case CommandType.COMPLETE_REMINDER:
                     payload = CompleteReminderPayload(**cmd.payload)
-                    result = self.reminders.complete_reminder(
+                    result = await asyncio.to_thread(
+                        self.reminders.complete_reminder,
                         reminder_id=payload.reminder_id,
                     )
                 # --- Outlook Email ---
@@ -347,29 +350,29 @@ class Agent:
                 # --- Documents ---
                 case CommandType.CONVERT_MD_TO_PDF:
                     p = ConvertDocumentPayload(**cmd.payload)
-                    result = self.documents.convert_md_to_pdf(md_path=p.md_path, output_path=p.output_path)
+                    result = await asyncio.to_thread(self.documents.convert_md_to_pdf, md_path=p.md_path, output_path=p.output_path)
                 case CommandType.CONVERT_MD_TO_DOCX:
                     p = ConvertDocumentPayload(**cmd.payload)
-                    result = self.documents.convert_md_to_docx(md_path=p.md_path, output_path=p.output_path)
+                    result = await asyncio.to_thread(self.documents.convert_md_to_docx, md_path=p.md_path, output_path=p.output_path)
                 # --- Voice Memos ---
                 case CommandType.LIST_RECORDINGS:
                     p = ListRecordingsPayload(**cmd.payload)
-                    result = self.voice_memos.list_recordings(date=p.date, top=p.top)
+                    result = await asyncio.to_thread(self.voice_memos.list_recordings, date=p.date, top=p.top)
                 case CommandType.TRANSCRIBE_RECORDING:
                     p = TranscribeRecordingPayload(**cmd.payload)
                     result = await self.voice_memos.transcribe(filename=p.filename, date=p.date)
                 # --- Apple Notes ---
                 case CommandType.SEARCH_NOTES:
                     p = SearchNotesPayload(**cmd.payload)
-                    result = self.notes.search_notes(query=p.query, folder=p.folder, top=p.top)
+                    result = await asyncio.to_thread(self.notes.search_notes, query=p.query, folder=p.folder, top=p.top)
                 case CommandType.GET_NOTE:
                     p = GetNotePayload(**cmd.payload)
-                    result = self.notes.get_note(note_id=p.note_id)
+                    result = await asyncio.to_thread(self.notes.get_note, note_id=p.note_id)
                 case CommandType.CREATE_NOTE:
                     p = CreateNotePayload(**cmd.payload)
-                    result = self.notes.create_note(title=p.title, body=p.body, folder=p.folder, body_is_html=p.body_is_html)
+                    result = await asyncio.to_thread(self.notes.create_note, title=p.title, body=p.body, folder=p.folder, body_is_html=p.body_is_html)
                 case CommandType.LIST_NOTE_FOLDERS:
-                    result = self.notes.list_folders()
+                    result = await asyncio.to_thread(self.notes.list_folders)
                 case CommandType.UPDATE_AGENT:
                     result = await self._self_update()
                 case CommandType.PING:
