@@ -79,6 +79,10 @@ class CommandType(str, Enum):
     MP_RECENT_TASKS = "mp_recent_tasks"
     MP_GET_TASK = "mp_get_task"
     MP_UPDATE_TASK = "mp_update_task"
+    MP_OUTSTANDING_SUMMARY = "mp_outstanding_summary"
+    MP_OUTSTANDING_BY_PROJECT = "mp_outstanding_by_project"
+    MP_BILLABLE_SUMMARY = "mp_billable_summary"
+    MP_ACTIVITY_RECENT = "mp_activity_recent"
     # System
     UPDATE_AGENT = "update_agent"
     AGENT_STATUS = "agent_status"

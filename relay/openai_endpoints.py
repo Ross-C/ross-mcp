@@ -910,6 +910,26 @@ async def mp_recent_tasks(_=Depends(_get_api_key)):
     return await _run("mp_recent_tasks")
 
 
+@router.post("/mp-outstanding-summary", summary="Get total outstanding task count with status breakdown")
+async def mp_outstanding_summary(_=Depends(_get_api_key)):
+    return await _run("mp_outstanding_summary")
+
+
+@router.post("/mp-outstanding-by-project", summary="Get outstanding task counts by project")
+async def mp_outstanding_by_project(_=Depends(_get_api_key)):
+    return await _run("mp_outstanding_by_project")
+
+
+@router.post("/mp-billable-summary", summary="Get billable tasks summary with hours and amounts")
+async def mp_billable_summary(_=Depends(_get_api_key)):
+    return await _run("mp_billable_summary")
+
+
+@router.post("/mp-activity-recent", summary="Get recent activity log across all projects")
+async def mp_activity_recent(_=Depends(_get_api_key)):
+    return await _run("mp_activity_recent")
+
+
 # =====================
 # Agent Management
 # =====================

@@ -193,6 +193,10 @@ class Agent:
                             CommandType.MP_RECENT_TASKS,
                             CommandType.MP_GET_TASK,
                             CommandType.MP_UPDATE_TASK,
+                            CommandType.MP_OUTSTANDING_SUMMARY,
+                            CommandType.MP_OUTSTANDING_BY_PROJECT,
+                            CommandType.MP_BILLABLE_SUMMARY,
+                            CommandType.MP_ACTIVITY_RECENT,
                         ])
                     if self.enchant_cbs.is_configured:
                         capabilities.extend([
@@ -472,6 +476,14 @@ class Agent:
                     result = await self.mp_portal.get_overdue_tasks()
                 case CommandType.MP_RECENT_TASKS:
                     result = await self.mp_portal.get_recent_tasks()
+                case CommandType.MP_OUTSTANDING_SUMMARY:
+                    result = await self.mp_portal.get_outstanding_summary()
+                case CommandType.MP_OUTSTANDING_BY_PROJECT:
+                    result = await self.mp_portal.get_outstanding_by_project()
+                case CommandType.MP_BILLABLE_SUMMARY:
+                    result = await self.mp_portal.get_billable_summary()
+                case CommandType.MP_ACTIVITY_RECENT:
+                    result = await self.mp_portal.get_recent_activity()
                 # --- Documents ---
                 case CommandType.CONVERT_MD_TO_PDF:
                     p = ConvertDocumentPayload(**cmd.payload)

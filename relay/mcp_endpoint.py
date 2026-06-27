@@ -1186,6 +1186,34 @@ async def mp_recent_tasks() -> str:
     return json.dumps(result, indent=2)
 
 
+@mcp.tool()
+async def mp_outstanding_summary() -> str:
+    """Get total count of outstanding tasks across all projects, with breakdown by status (Backlog, In Progress, etc.)."""
+    result = await _send("mp_outstanding_summary")
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def mp_outstanding_by_project() -> str:
+    """Get outstanding task counts broken down by project, sorted by highest first. Use when asked 'which projects are busiest' or 'outstanding by project'."""
+    result = await _send("mp_outstanding_by_project")
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def mp_billable_summary() -> str:
+    """Get billable tasks summary — number of billable tasks, total hours outstanding, hourly rate, and total amount outstanding in GBP. Use for 'what can I bill', 'billable summary', or 'invoice amounts'."""
+    result = await _send("mp_billable_summary")
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def mp_activity_recent() -> str:
+    """Get recent activity log across all projects — task creations, status changes, updates. Use for 'what happened recently' or 'recent activity'."""
+    result = await _send("mp_activity_recent")
+    return json.dumps(result, indent=2)
+
+
 # --- Agent Management Tools ---
 
 

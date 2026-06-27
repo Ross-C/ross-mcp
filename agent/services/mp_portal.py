@@ -330,3 +330,31 @@ class MPPortalService:
             resp = await client.get(f"{self.api_base}/tasks/recent", headers=self._headers())
             resp.raise_for_status()
             return resp.json()
+
+    async def get_outstanding_summary(self) -> dict:
+        """Get total outstanding task count with breakdown by status."""
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.get(f"{self.api_base}/summary/outstanding", headers=self._headers())
+            resp.raise_for_status()
+            return resp.json()
+
+    async def get_outstanding_by_project(self) -> dict:
+        """Get outstanding task counts broken down by project."""
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.get(f"{self.api_base}/summary/outstanding-by-project", headers=self._headers())
+            resp.raise_for_status()
+            return resp.json()
+
+    async def get_billable_summary(self) -> dict:
+        """Get billable tasks summary — count, hours, rate, and total outstanding."""
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.get(f"{self.api_base}/summary/billable", headers=self._headers())
+            resp.raise_for_status()
+            return resp.json()
+
+    async def get_recent_activity(self) -> dict:
+        """Get recent activity log across all projects."""
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.get(f"{self.api_base}/activity/recent", headers=self._headers())
+            resp.raise_for_status()
+            return resp.json()
