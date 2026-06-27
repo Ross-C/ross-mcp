@@ -89,7 +89,8 @@ class MPPortalService:
         for project in self._project_cache:
             name = (project.get("name") or "").lower()
             prefix = (project.get("prefix") or "").lower()
-            customer = (project.get("customer", {}).get("name") or project.get("customer_name") or "").lower()
+            cust_raw = project.get("customer", "")
+            customer = (cust_raw.get("name") if isinstance(cust_raw, dict) else cust_raw or "").lower()
 
             score = 0.0
 
