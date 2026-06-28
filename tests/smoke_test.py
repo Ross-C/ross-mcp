@@ -123,6 +123,14 @@ def test_outlook():
         result = call_tool("search-emails", {"query": "", "folder": "inbox", "top": 1})
         return "error" not in result or result.get("status") == "success"
 
+    def search_sent_emails():
+        # Regression: voice agent must be able to check Sent Items (folder=sentitems)
+        result = call_tool("search-emails", {"query": "", "folder": "sentitems", "top": 1})
+        if "error" in result and result.get("status") != "success":
+            return False
+        data = result.get("data", result)
+        return "emails" in data
+
     def list_events():
         result = call_tool("list-events", {"top": 1})
         return "error" not in result or result.get("status") == "success"
@@ -134,6 +142,7 @@ def test_outlook():
         return "error" not in result or result.get("status") == "success"
 
     test("Search emails", search_emails)
+    test("Search sent items", search_sent_emails)
     test("List calendar events", list_events)
     test("Find available slots", find_slots)
 
@@ -441,9 +450,37 @@ def test_elevenlabs():
             print(f"           Missing: {', '.join(missing)}")
         return len(missing) == 0
 
+    def search_emails_exposes_folder():
+        # Regression: voice agent's search-emails tool must expose the `folder`
+        # param so it can check Sent Items (drafts/archive too), not just inbox.
+        resp = httpx.get(
+            f"https://api.elevenlabs.io/v1/convai/agents/{AGENT_ID}",
+            headers={"xi-api-key": ELEVENLABS_KEY},
+            timeout=15,
+        )
+        tool_ids = resp.json()["conversation_config"]["agent"]["prompt"]["tool_ids"]
+        for tid in tool_ids:
+            tdata = httpx.get(
+                f"https://api.elevenlabs.io/v1/convai/tools/{tid}",
+                headers={"xi-api-key": ELEVENLABS_KEY},
+                timeout=10,
+            ).json()
+            cfg = tdata.get("tool_config", {})
+            if cfg.get("name") == "search-emails":
+                props = cfg.get("api_schema", {}).get("request_body_schema", {}).get("properties", {})
+                folder = props.get("folder")
+                if not folder:
+                    print("           search-emails tool is missing the 'folder' param")
+                    return False
+                enum = folder.get("enum") or []
+                return "sentitems" in enum
+        print("           search-emails tool not found on agent")
+        return False
+
     test(f"ElevenLabs agent has 38+ tools", tools_registered)
     test("All ElevenLabs tools resolve with valid URLs", all_tools_valid)
     test("All expected tools present on voice agent", expected_tools_present)
+    test("Voice search-emails exposes folder (sent items)", search_emails_exposes_folder)
 
 
 # ==========================================
