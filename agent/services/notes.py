@@ -13,7 +13,7 @@ def _run_applescript(script: str) -> str:
     """Run an AppleScript and return stdout."""
     result = subprocess.run(
         ["osascript", "-e", script],
-        capture_output=True, text=True, timeout=60,
+        capture_output=True, text=True, timeout=90,
     )
     if result.returncode != 0:
         raise RuntimeError(f"AppleScript error: {result.stderr.strip()}")

@@ -1,6 +1,7 @@
 """Cloud relay — WebSocket hub for agents, HTTP API for commands."""
 
 import asyncio
+import hashlib
 import json
 import logging
 import os
@@ -269,8 +270,8 @@ async def _try_agent(agent_id: str, agent: ConnectedAgent, command_type: Command
             "status": "running",
         }
         await agent.ws.send_text(cmd.model_dump_json())
-        slow_commands = {"search_notes", "get_note", "transcribe_recording"}
-        timeout = 60 if command_type.value in slow_commands else 30
+        slow_commands = {"search_notes", "get_note", "transcribe_recording", "create_note"}
+        timeout = 90 if command_type.value in slow_commands else 30
         response = await asyncio.wait_for(future, timeout=timeout)
         agent.current_task = {
             **agent.current_task,
@@ -331,6 +332,11 @@ async def _try_agent(agent_id: str, agent: ConnectedAgent, command_type: Command
 # Preferred agent order — mac-mini is always-on primary, macbook-pro as fallback
 PREFERRED_AGENTS = ["mac-mini", "macbook-pro"]
 
+# Dedup guard for destructive send operations (prevents double-sends from retries)
+_recent_sends: dict[str, float] = {}  # sha256 -> unix timestamp
+_DEDUP_COMMANDS = {"send_email", "send_draft"}
+_DEDUP_WINDOW = 60  # seconds
+
 
 async def execute_command(command_type: CommandType, payload: dict) -> dict:
     """Route a command to a capable agent and return the response dict.
@@ -342,6 +348,24 @@ async def execute_command(command_type: CommandType, payload: dict) -> dict:
     """
     if not agents:
         raise HTTPException(status_code=503, detail="No agents connected")
+
+    # Dedup guard: block identical send operations within the time window
+    if command_type.value in _DEDUP_COMMANDS:
+        raw = json.dumps({"t": command_type.value, "p": payload}, sort_keys=True)
+        key = hashlib.sha256(raw.encode()).hexdigest()
+        now = datetime.now(timezone.utc).timestamp()
+        # Purge expired entries
+        expired = [k for k, v in _recent_sends.items() if now - v >= _DEDUP_WINDOW]
+        for k in expired:
+            del _recent_sends[k]
+        if key in _recent_sends:
+            logger.warning(f"Blocked duplicate {command_type.value} (within {_DEDUP_WINDOW}s)")
+            return {
+                "status": "success",
+                "data": {"message": "This action was already completed moments ago."},
+                "command_id": "dedup",
+            }
+        _recent_sends[key] = now
 
     # Build ordered list of capable agents
     capable = []
