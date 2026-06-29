@@ -88,6 +88,33 @@ class CommandType(str, Enum):
     MP_CREATE_CUSTOMER = "mp_create_customer"
     MP_LOG_ACTIVITY = "mp_log_activity"
     MP_LIST_ACTIVITIES = "mp_list_activities"
+    # QuickBooks
+    QB_LIST_COMPANIES = "qb_list_companies"
+    QB_GET_COMPANY_INFO = "qb_get_company_info"
+    QB_LIST_CUSTOMERS = "qb_list_customers"
+    QB_GET_CUSTOMER = "qb_get_customer"
+    QB_SEARCH_CUSTOMERS = "qb_search_customers"
+    QB_CREATE_CUSTOMER = "qb_create_customer"
+    QB_LIST_INVOICES = "qb_list_invoices"
+    QB_GET_INVOICE = "qb_get_invoice"
+    QB_CREATE_INVOICE = "qb_create_invoice"
+    QB_LIST_PAYMENTS = "qb_list_payments"
+    QB_GET_PAYMENT = "qb_get_payment"
+    QB_CREATE_PAYMENT = "qb_create_payment"
+    QB_LIST_BILLS = "qb_list_bills"
+    QB_GET_BILL = "qb_get_bill"
+    QB_CREATE_BILL = "qb_create_bill"
+    QB_CREATE_EXPENSE = "qb_create_expense"
+    QB_LIST_ACCOUNTS = "qb_list_accounts"
+    QB_LIST_ITEMS = "qb_list_items"
+    QB_GET_ITEM = "qb_get_item"
+    QB_CREATE_ITEM = "qb_create_item"
+    QB_LIST_TAX_CODES = "qb_list_tax_codes"
+    QB_LIST_TAX_RATES = "qb_list_tax_rates"
+    QB_LIST_VENDORS = "qb_list_vendors"
+    QB_SEARCH_VENDORS = "qb_search_vendors"
+    QB_PROFIT_AND_LOSS = "qb_profit_and_loss"
+    QB_BALANCE_SHEET = "qb_balance_sheet"
     # Composite
     DAILY_BRIEF = "daily_brief"
     # System
@@ -471,6 +498,152 @@ class MPLogActivityPayload(BaseModel):
 class MPListActivitiesPayload(BaseModel):
     customer_id: int | None = None
     project_id: int | None = None
+
+
+# --- QuickBooks Payloads ---
+
+class QBRealmPayload(BaseModel):
+    realm_id: str
+
+
+class QBListCustomersPayload(BaseModel):
+    realm_id: str
+    active_only: bool = True
+    max_results: int = 100
+
+
+class QBGetCustomerPayload(BaseModel):
+    realm_id: str
+    customer_id: str
+
+
+class QBSearchCustomersPayload(BaseModel):
+    realm_id: str
+    name: str
+
+
+class QBCreateCustomerPayload(BaseModel):
+    realm_id: str
+    display_name: str
+    email: str | None = None
+    phone: str | None = None
+    company_name: str | None = None
+
+
+class QBListInvoicesPayload(BaseModel):
+    realm_id: str
+    max_results: int = 20
+    status: str | None = None
+
+
+class QBGetInvoicePayload(BaseModel):
+    realm_id: str
+    invoice_id: str
+
+
+class QBCreateInvoicePayload(BaseModel):
+    realm_id: str
+    customer_id: str
+    line_items: list[dict]
+    due_date: str | None = None
+    invoice_number: str | None = None
+    memo: str | None = None
+
+
+class QBListPaymentsPayload(BaseModel):
+    realm_id: str
+    max_results: int = 20
+
+
+class QBGetPaymentPayload(BaseModel):
+    realm_id: str
+    payment_id: str
+
+
+class QBCreatePaymentPayload(BaseModel):
+    realm_id: str
+    customer_id: str
+    total_amount: float
+    invoice_id: str | None = None
+    payment_date: str | None = None
+    payment_method: str | None = None
+
+
+class QBListBillsPayload(BaseModel):
+    realm_id: str
+    max_results: int = 20
+    unpaid_only: bool = False
+
+
+class QBGetBillPayload(BaseModel):
+    realm_id: str
+    bill_id: str
+
+
+class QBCreateBillPayload(BaseModel):
+    realm_id: str
+    vendor_id: str
+    line_items: list[dict]
+    due_date: str | None = None
+    memo: str | None = None
+
+
+class QBCreateExpensePayload(BaseModel):
+    realm_id: str
+    account_id: str
+    line_items: list[dict]
+    vendor_id: str | None = None
+    payment_type: str = "Cash"
+    memo: str | None = None
+    txn_date: str | None = None
+
+
+class QBListAccountsPayload(BaseModel):
+    realm_id: str
+    account_type: str | None = None
+    max_results: int = 100
+
+
+class QBListItemsPayload(BaseModel):
+    realm_id: str
+    max_results: int = 100
+
+
+class QBGetItemPayload(BaseModel):
+    realm_id: str
+    item_id: str
+
+
+class QBCreateItemPayload(BaseModel):
+    realm_id: str
+    name: str
+    item_type: str = "Service"
+    income_account_id: str | None = None
+    expense_account_id: str | None = None
+    unit_price: float | None = None
+    description: str | None = None
+
+
+class QBListVendorsPayload(BaseModel):
+    realm_id: str
+    active_only: bool = True
+    max_results: int = 100
+
+
+class QBSearchVendorsPayload(BaseModel):
+    realm_id: str
+    name: str
+
+
+class QBProfitAndLossPayload(BaseModel):
+    realm_id: str
+    start_date: str | None = None
+    end_date: str | None = None
+
+
+class QBBalanceSheetPayload(BaseModel):
+    realm_id: str
+    report_date: str | None = None
 
 
 class DailyBriefPayload(BaseModel):

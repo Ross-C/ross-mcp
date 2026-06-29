@@ -80,6 +80,29 @@ from shared.messages import (
     MPCreateCustomerPayload,
     MPLogActivityPayload,
     MPListActivitiesPayload,
+    QBRealmPayload,
+    QBListCustomersPayload,
+    QBGetCustomerPayload,
+    QBSearchCustomersPayload,
+    QBCreateCustomerPayload,
+    QBListInvoicesPayload,
+    QBGetInvoicePayload,
+    QBCreateInvoicePayload,
+    QBListPaymentsPayload,
+    QBGetPaymentPayload,
+    QBCreatePaymentPayload,
+    QBListBillsPayload,
+    QBGetBillPayload,
+    QBCreateBillPayload,
+    QBCreateExpensePayload,
+    QBListAccountsPayload,
+    QBListItemsPayload,
+    QBGetItemPayload,
+    QBCreateItemPayload,
+    QBListVendorsPayload,
+    QBSearchVendorsPayload,
+    QBProfitAndLossPayload,
+    QBBalanceSheetPayload,
     DailyBriefPayload,
     UpdateAgentPayload,
 )
@@ -97,6 +120,8 @@ from agent.services.documents import DocumentService
 from agent.services.enchant_cbs import EnchantCBSService
 from agent.services.enchant_rcsc import EnchantRCSCService
 from agent.services.mp_portal import MPPortalService
+from agent.services.quickbooks_auth import QuickBooksAuth
+from agent.services.quickbooks import QuickBooksService
 from agent.services.daily_brief import DailyBriefService
 
 load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"))
@@ -131,6 +156,8 @@ class Agent:
         self.enchant_cbs = EnchantCBSService()
         self.enchant_rcsc = EnchantRCSCService()
         self.mp_portal = MPPortalService()
+        self.qb_auth = QuickBooksAuth()
+        self.qb = QuickBooksService(self.qb_auth)
         self.daily_brief = DailyBriefService(
             reminders=self.reminders,
             calendar=self.calendar,
@@ -239,6 +266,35 @@ class Agent:
                             CommandType.GMAIL_LIST_LABELS,
                             CommandType.GCAL_LIST_EVENTS,
                             CommandType.GCAL_CREATE_EVENT,
+                        ])
+                    if self.qb_auth.is_authenticated:
+                        capabilities.extend([
+                            CommandType.QB_LIST_COMPANIES,
+                            CommandType.QB_GET_COMPANY_INFO,
+                            CommandType.QB_LIST_CUSTOMERS,
+                            CommandType.QB_GET_CUSTOMER,
+                            CommandType.QB_SEARCH_CUSTOMERS,
+                            CommandType.QB_CREATE_CUSTOMER,
+                            CommandType.QB_LIST_INVOICES,
+                            CommandType.QB_GET_INVOICE,
+                            CommandType.QB_CREATE_INVOICE,
+                            CommandType.QB_LIST_PAYMENTS,
+                            CommandType.QB_GET_PAYMENT,
+                            CommandType.QB_CREATE_PAYMENT,
+                            CommandType.QB_LIST_BILLS,
+                            CommandType.QB_GET_BILL,
+                            CommandType.QB_CREATE_BILL,
+                            CommandType.QB_CREATE_EXPENSE,
+                            CommandType.QB_LIST_ACCOUNTS,
+                            CommandType.QB_LIST_ITEMS,
+                            CommandType.QB_GET_ITEM,
+                            CommandType.QB_CREATE_ITEM,
+                            CommandType.QB_LIST_TAX_CODES,
+                            CommandType.QB_LIST_TAX_RATES,
+                            CommandType.QB_LIST_VENDORS,
+                            CommandType.QB_SEARCH_VENDORS,
+                            CommandType.QB_PROFIT_AND_LOSS,
+                            CommandType.QB_BALANCE_SHEET,
                         ])
                     if self.outlook_auth.is_authenticated:
                         capabilities.extend([
@@ -518,6 +574,84 @@ class Agent:
                     result = await self.mp_portal.get_billable_summary()
                 case CommandType.MP_ACTIVITY_RECENT:
                     result = await self.mp_portal.get_recent_activity()
+                # --- QuickBooks ---
+                case CommandType.QB_LIST_COMPANIES:
+                    result = await self.qb.list_companies()
+                case CommandType.QB_GET_COMPANY_INFO:
+                    p = QBRealmPayload(**cmd.payload)
+                    result = await self.qb.get_company_info(realm_id=p.realm_id)
+                case CommandType.QB_LIST_CUSTOMERS:
+                    p = QBListCustomersPayload(**cmd.payload)
+                    result = await self.qb.list_customers(realm_id=p.realm_id, active_only=p.active_only, max_results=p.max_results)
+                case CommandType.QB_GET_CUSTOMER:
+                    p = QBGetCustomerPayload(**cmd.payload)
+                    result = await self.qb.get_customer(realm_id=p.realm_id, customer_id=p.customer_id)
+                case CommandType.QB_SEARCH_CUSTOMERS:
+                    p = QBSearchCustomersPayload(**cmd.payload)
+                    result = await self.qb.search_customers(realm_id=p.realm_id, name=p.name)
+                case CommandType.QB_CREATE_CUSTOMER:
+                    p = QBCreateCustomerPayload(**cmd.payload)
+                    result = await self.qb.create_customer(realm_id=p.realm_id, display_name=p.display_name, email=p.email, phone=p.phone, company_name=p.company_name)
+                case CommandType.QB_LIST_INVOICES:
+                    p = QBListInvoicesPayload(**cmd.payload)
+                    result = await self.qb.list_invoices(realm_id=p.realm_id, max_results=p.max_results, status=p.status)
+                case CommandType.QB_GET_INVOICE:
+                    p = QBGetInvoicePayload(**cmd.payload)
+                    result = await self.qb.get_invoice(realm_id=p.realm_id, invoice_id=p.invoice_id)
+                case CommandType.QB_CREATE_INVOICE:
+                    p = QBCreateInvoicePayload(**cmd.payload)
+                    result = await self.qb.create_invoice(realm_id=p.realm_id, customer_id=p.customer_id, line_items=p.line_items, due_date=p.due_date, invoice_number=p.invoice_number, memo=p.memo)
+                case CommandType.QB_LIST_PAYMENTS:
+                    p = QBListPaymentsPayload(**cmd.payload)
+                    result = await self.qb.list_payments(realm_id=p.realm_id, max_results=p.max_results)
+                case CommandType.QB_GET_PAYMENT:
+                    p = QBGetPaymentPayload(**cmd.payload)
+                    result = await self.qb.get_payment(realm_id=p.realm_id, payment_id=p.payment_id)
+                case CommandType.QB_CREATE_PAYMENT:
+                    p = QBCreatePaymentPayload(**cmd.payload)
+                    result = await self.qb.create_payment(realm_id=p.realm_id, customer_id=p.customer_id, total_amount=p.total_amount, invoice_id=p.invoice_id, payment_date=p.payment_date, payment_method=p.payment_method)
+                case CommandType.QB_LIST_BILLS:
+                    p = QBListBillsPayload(**cmd.payload)
+                    result = await self.qb.list_bills(realm_id=p.realm_id, max_results=p.max_results, unpaid_only=p.unpaid_only)
+                case CommandType.QB_GET_BILL:
+                    p = QBGetBillPayload(**cmd.payload)
+                    result = await self.qb.get_bill(realm_id=p.realm_id, bill_id=p.bill_id)
+                case CommandType.QB_CREATE_BILL:
+                    p = QBCreateBillPayload(**cmd.payload)
+                    result = await self.qb.create_bill(realm_id=p.realm_id, vendor_id=p.vendor_id, line_items=p.line_items, due_date=p.due_date, memo=p.memo)
+                case CommandType.QB_CREATE_EXPENSE:
+                    p = QBCreateExpensePayload(**cmd.payload)
+                    result = await self.qb.create_expense(realm_id=p.realm_id, account_id=p.account_id, line_items=p.line_items, vendor_id=p.vendor_id, payment_type=p.payment_type, memo=p.memo, txn_date=p.txn_date)
+                case CommandType.QB_LIST_ACCOUNTS:
+                    p = QBListAccountsPayload(**cmd.payload)
+                    result = await self.qb.list_accounts(realm_id=p.realm_id, account_type=p.account_type, max_results=p.max_results)
+                case CommandType.QB_LIST_ITEMS:
+                    p = QBListItemsPayload(**cmd.payload)
+                    result = await self.qb.list_items(realm_id=p.realm_id, max_results=p.max_results)
+                case CommandType.QB_GET_ITEM:
+                    p = QBGetItemPayload(**cmd.payload)
+                    result = await self.qb.get_item(realm_id=p.realm_id, item_id=p.item_id)
+                case CommandType.QB_CREATE_ITEM:
+                    p = QBCreateItemPayload(**cmd.payload)
+                    result = await self.qb.create_item(realm_id=p.realm_id, name=p.name, item_type=p.item_type, income_account_id=p.income_account_id, expense_account_id=p.expense_account_id, unit_price=p.unit_price, description=p.description)
+                case CommandType.QB_LIST_TAX_CODES:
+                    p = QBRealmPayload(**cmd.payload)
+                    result = await self.qb.list_tax_codes(realm_id=p.realm_id)
+                case CommandType.QB_LIST_TAX_RATES:
+                    p = QBRealmPayload(**cmd.payload)
+                    result = await self.qb.list_tax_rates(realm_id=p.realm_id)
+                case CommandType.QB_LIST_VENDORS:
+                    p = QBListVendorsPayload(**cmd.payload)
+                    result = await self.qb.list_vendors(realm_id=p.realm_id, active_only=p.active_only, max_results=p.max_results)
+                case CommandType.QB_SEARCH_VENDORS:
+                    p = QBSearchVendorsPayload(**cmd.payload)
+                    result = await self.qb.search_vendors(realm_id=p.realm_id, name=p.name)
+                case CommandType.QB_PROFIT_AND_LOSS:
+                    p = QBProfitAndLossPayload(**cmd.payload)
+                    result = await self.qb.profit_and_loss(realm_id=p.realm_id, start_date=p.start_date, end_date=p.end_date)
+                case CommandType.QB_BALANCE_SHEET:
+                    p = QBBalanceSheetPayload(**cmd.payload)
+                    result = await self.qb.balance_sheet(realm_id=p.realm_id, report_date=p.report_date)
                 # --- Daily Brief ---
                 case CommandType.DAILY_BRIEF:
                     p = DailyBriefPayload(**cmd.payload)
@@ -708,6 +842,16 @@ async def run(web_port: int = 8001):
             await agent.google_auth.start_background_refresh()
     else:
         logger.info("GOOGLE_CLIENT_ID not set — Gmail/GCal integration disabled")
+
+    # QuickBooks auth — try saved tokens first
+    if agent.qb_auth.client_id:
+        if agent.qb_auth.is_authenticated:
+            await agent.qb_auth.start_background_refresh()
+            logger.info("QuickBooks authenticated — QB commands available")
+        else:
+            logger.info("QuickBooks not authenticated — run OAuth flow to connect")
+    else:
+        logger.info("QB_CLIENT_ID not set — QuickBooks integration disabled")
 
     # Outlook auth — try saved tokens first, prompt login if needed
     if agent.outlook_auth.client_id:

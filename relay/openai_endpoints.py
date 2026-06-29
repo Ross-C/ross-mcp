@@ -995,6 +995,318 @@ async def mp_create_customer(req: MPCreateCustomerRequest, _=Depends(_get_api_ke
 
 
 # =====================
+# QuickBooks
+# =====================
+
+
+@router.post("/qb-list-companies", summary="List all connected QuickBooks companies (returns realm IDs for other QB operations)")
+async def qb_list_companies(_=Depends(_get_api_key)):
+    return await _run("qb_list_companies")
+
+
+class QBRealmRequest(BaseModel):
+    realm_id: str = Field(description="QuickBooks company/realm ID (from qb-list-companies)")
+
+
+@router.post("/qb-get-company-info", summary="Get QuickBooks company information")
+async def qb_get_company_info(req: QBRealmRequest, _=Depends(_get_api_key)):
+    return await _run("qb_get_company_info", {"realm_id": req.realm_id})
+
+
+class QBListCustomersRequest(BaseModel):
+    realm_id: str = Field(description="QuickBooks company/realm ID")
+    active_only: bool = Field(default=True, description="Only active customers")
+    max_results: int = Field(default=100, description="Max results")
+
+
+@router.post("/qb-list-customers", summary="List QuickBooks customers")
+async def qb_list_customers(req: QBListCustomersRequest, _=Depends(_get_api_key)):
+    return await _run("qb_list_customers", {"realm_id": req.realm_id, "active_only": req.active_only, "max_results": req.max_results})
+
+
+class QBGetCustomerRequest(BaseModel):
+    realm_id: str = Field(description="QuickBooks company/realm ID")
+    customer_id: str = Field(description="Customer ID")
+
+
+@router.post("/qb-get-customer", summary="Get a QuickBooks customer by ID")
+async def qb_get_customer(req: QBGetCustomerRequest, _=Depends(_get_api_key)):
+    return await _run("qb_get_customer", {"realm_id": req.realm_id, "customer_id": req.customer_id})
+
+
+class QBSearchCustomersRequest(BaseModel):
+    realm_id: str = Field(description="QuickBooks company/realm ID")
+    name: str = Field(description="Customer name to search for")
+
+
+@router.post("/qb-search-customers", summary="Search QuickBooks customers by name")
+async def qb_search_customers(req: QBSearchCustomersRequest, _=Depends(_get_api_key)):
+    return await _run("qb_search_customers", {"realm_id": req.realm_id, "name": req.name})
+
+
+class QBCreateCustomerRequest(BaseModel):
+    realm_id: str = Field(description="QuickBooks company/realm ID")
+    display_name: str = Field(description="Customer display name")
+    email: str | None = Field(default=None, description="Email address")
+    phone: str | None = Field(default=None, description="Phone number")
+    company_name: str | None = Field(default=None, description="Company name")
+
+
+@router.post("/qb-create-customer", summary="Create a QuickBooks customer")
+async def qb_create_customer(req: QBCreateCustomerRequest, _=Depends(_get_api_key)):
+    payload: dict = {"realm_id": req.realm_id, "display_name": req.display_name}
+    if req.email: payload["email"] = req.email
+    if req.phone: payload["phone"] = req.phone
+    if req.company_name: payload["company_name"] = req.company_name
+    return await _run("qb_create_customer", payload)
+
+
+class QBListInvoicesRequest(BaseModel):
+    realm_id: str = Field(description="QuickBooks company/realm ID")
+    max_results: int = Field(default=20, description="Max results")
+    status: str | None = Field(default=None, description="Filter: paid, unpaid, or overdue")
+
+
+@router.post("/qb-list-invoices", summary="List QuickBooks invoices")
+async def qb_list_invoices(req: QBListInvoicesRequest, _=Depends(_get_api_key)):
+    payload: dict = {"realm_id": req.realm_id, "max_results": req.max_results}
+    if req.status: payload["status"] = req.status
+    return await _run("qb_list_invoices", payload)
+
+
+class QBGetInvoiceRequest(BaseModel):
+    realm_id: str = Field(description="QuickBooks company/realm ID")
+    invoice_id: str = Field(description="Invoice ID")
+
+
+@router.post("/qb-get-invoice", summary="Get a QuickBooks invoice with line items")
+async def qb_get_invoice(req: QBGetInvoiceRequest, _=Depends(_get_api_key)):
+    return await _run("qb_get_invoice", {"realm_id": req.realm_id, "invoice_id": req.invoice_id})
+
+
+class QBCreateInvoiceRequest(BaseModel):
+    realm_id: str = Field(description="QuickBooks company/realm ID")
+    customer_id: str = Field(description="Customer ID to invoice")
+    line_items: list[dict] = Field(description="Line items: description, amount, quantity, item_id, tax_code_id")
+    due_date: str | None = Field(default=None, description="Due date YYYY-MM-DD")
+    invoice_number: str | None = Field(default=None, description="Custom invoice number")
+    memo: str | None = Field(default=None, description="Customer memo")
+
+
+@router.post("/qb-create-invoice", summary="Create a QuickBooks invoice")
+async def qb_create_invoice(req: QBCreateInvoiceRequest, _=Depends(_get_api_key)):
+    payload: dict = {"realm_id": req.realm_id, "customer_id": req.customer_id, "line_items": req.line_items}
+    if req.due_date: payload["due_date"] = req.due_date
+    if req.invoice_number: payload["invoice_number"] = req.invoice_number
+    if req.memo: payload["memo"] = req.memo
+    return await _run("qb_create_invoice", payload)
+
+
+class QBListPaymentsRequest(BaseModel):
+    realm_id: str = Field(description="QuickBooks company/realm ID")
+    max_results: int = Field(default=20, description="Max results")
+
+
+@router.post("/qb-list-payments", summary="List recent QuickBooks payments")
+async def qb_list_payments(req: QBListPaymentsRequest, _=Depends(_get_api_key)):
+    return await _run("qb_list_payments", {"realm_id": req.realm_id, "max_results": req.max_results})
+
+
+class QBGetPaymentRequest(BaseModel):
+    realm_id: str = Field(description="QuickBooks company/realm ID")
+    payment_id: str = Field(description="Payment ID")
+
+
+@router.post("/qb-get-payment", summary="Get a QuickBooks payment by ID")
+async def qb_get_payment(req: QBGetPaymentRequest, _=Depends(_get_api_key)):
+    return await _run("qb_get_payment", {"realm_id": req.realm_id, "payment_id": req.payment_id})
+
+
+class QBCreatePaymentRequest(BaseModel):
+    realm_id: str = Field(description="QuickBooks company/realm ID")
+    customer_id: str = Field(description="Customer ID")
+    total_amount: float = Field(description="Payment amount")
+    invoice_id: str | None = Field(default=None, description="Invoice ID to apply payment to")
+    payment_date: str | None = Field(default=None, description="Payment date YYYY-MM-DD")
+    payment_method: str | None = Field(default=None, description="Payment method")
+
+
+@router.post("/qb-create-payment", summary="Record a QuickBooks payment")
+async def qb_create_payment(req: QBCreatePaymentRequest, _=Depends(_get_api_key)):
+    payload: dict = {"realm_id": req.realm_id, "customer_id": req.customer_id, "total_amount": req.total_amount}
+    if req.invoice_id: payload["invoice_id"] = req.invoice_id
+    if req.payment_date: payload["payment_date"] = req.payment_date
+    if req.payment_method: payload["payment_method"] = req.payment_method
+    return await _run("qb_create_payment", payload)
+
+
+class QBListBillsRequest(BaseModel):
+    realm_id: str = Field(description="QuickBooks company/realm ID")
+    max_results: int = Field(default=20, description="Max results")
+    unpaid_only: bool = Field(default=False, description="Only unpaid bills")
+
+
+@router.post("/qb-list-bills", summary="List QuickBooks bills (supplier invoices). Use for VAT return purchase tracking.")
+async def qb_list_bills(req: QBListBillsRequest, _=Depends(_get_api_key)):
+    return await _run("qb_list_bills", {"realm_id": req.realm_id, "max_results": req.max_results, "unpaid_only": req.unpaid_only})
+
+
+class QBGetBillRequest(BaseModel):
+    realm_id: str = Field(description="QuickBooks company/realm ID")
+    bill_id: str = Field(description="Bill ID")
+
+
+@router.post("/qb-get-bill", summary="Get a QuickBooks bill with line items")
+async def qb_get_bill(req: QBGetBillRequest, _=Depends(_get_api_key)):
+    return await _run("qb_get_bill", {"realm_id": req.realm_id, "bill_id": req.bill_id})
+
+
+class QBCreateBillRequest(BaseModel):
+    realm_id: str = Field(description="QuickBooks company/realm ID")
+    vendor_id: str = Field(description="Vendor/supplier ID")
+    line_items: list[dict] = Field(description="Line items: description, amount, account_id, tax_code_id")
+    due_date: str | None = Field(default=None, description="Due date YYYY-MM-DD")
+    memo: str | None = Field(default=None, description="Private note")
+
+
+@router.post("/qb-create-bill", summary="Create a QuickBooks bill (supplier expense)")
+async def qb_create_bill(req: QBCreateBillRequest, _=Depends(_get_api_key)):
+    payload: dict = {"realm_id": req.realm_id, "vendor_id": req.vendor_id, "line_items": req.line_items}
+    if req.due_date: payload["due_date"] = req.due_date
+    if req.memo: payload["memo"] = req.memo
+    return await _run("qb_create_bill", payload)
+
+
+class QBCreateExpenseRequest(BaseModel):
+    realm_id: str = Field(description="QuickBooks company/realm ID")
+    account_id: str = Field(description="Payment account ID (e.g. bank account)")
+    line_items: list[dict] = Field(description="Line items: description, amount, expense_account_id, tax_code_id")
+    vendor_id: str | None = Field(default=None, description="Vendor/supplier ID")
+    payment_type: str = Field(default="Cash", description="Cash, Check, or CreditCard")
+    memo: str | None = Field(default=None, description="Private note")
+    txn_date: str | None = Field(default=None, description="Transaction date YYYY-MM-DD")
+
+
+@router.post("/qb-create-expense", summary="Create a QuickBooks expense (purchase)")
+async def qb_create_expense(req: QBCreateExpenseRequest, _=Depends(_get_api_key)):
+    payload: dict = {"realm_id": req.realm_id, "account_id": req.account_id, "line_items": req.line_items, "payment_type": req.payment_type}
+    if req.vendor_id: payload["vendor_id"] = req.vendor_id
+    if req.memo: payload["memo"] = req.memo
+    if req.txn_date: payload["txn_date"] = req.txn_date
+    return await _run("qb_create_expense", payload)
+
+
+class QBListAccountsRequest(BaseModel):
+    realm_id: str = Field(description="QuickBooks company/realm ID")
+    account_type: str | None = Field(default=None, description="Filter: Expense, Income, Bank, Asset")
+    max_results: int = Field(default=100, description="Max results")
+
+
+@router.post("/qb-list-accounts", summary="List QuickBooks chart of accounts")
+async def qb_list_accounts(req: QBListAccountsRequest, _=Depends(_get_api_key)):
+    payload: dict = {"realm_id": req.realm_id, "max_results": req.max_results}
+    if req.account_type: payload["account_type"] = req.account_type
+    return await _run("qb_list_accounts", payload)
+
+
+class QBListItemsRequest(BaseModel):
+    realm_id: str = Field(description="QuickBooks company/realm ID")
+    max_results: int = Field(default=100, description="Max results")
+
+
+@router.post("/qb-list-items", summary="List QuickBooks items/services")
+async def qb_list_items(req: QBListItemsRequest, _=Depends(_get_api_key)):
+    return await _run("qb_list_items", {"realm_id": req.realm_id, "max_results": req.max_results})
+
+
+class QBGetItemRequest(BaseModel):
+    realm_id: str = Field(description="QuickBooks company/realm ID")
+    item_id: str = Field(description="Item ID")
+
+
+@router.post("/qb-get-item", summary="Get a QuickBooks item/service by ID")
+async def qb_get_item(req: QBGetItemRequest, _=Depends(_get_api_key)):
+    return await _run("qb_get_item", {"realm_id": req.realm_id, "item_id": req.item_id})
+
+
+class QBCreateItemRequest(BaseModel):
+    realm_id: str = Field(description="QuickBooks company/realm ID")
+    name: str = Field(description="Item name")
+    item_type: str = Field(default="Service", description="Service, Inventory, or NonInventory")
+    income_account_id: str | None = Field(default=None, description="Income account for sales")
+    expense_account_id: str | None = Field(default=None, description="Expense account for purchases")
+    unit_price: float | None = Field(default=None, description="Default unit price")
+    description: str | None = Field(default=None, description="Item description")
+
+
+@router.post("/qb-create-item", summary="Create a QuickBooks item/service")
+async def qb_create_item(req: QBCreateItemRequest, _=Depends(_get_api_key)):
+    payload: dict = {"realm_id": req.realm_id, "name": req.name, "item_type": req.item_type}
+    if req.income_account_id: payload["income_account_id"] = req.income_account_id
+    if req.expense_account_id: payload["expense_account_id"] = req.expense_account_id
+    if req.unit_price is not None: payload["unit_price"] = req.unit_price
+    if req.description: payload["description"] = req.description
+    return await _run("qb_create_item", payload)
+
+
+@router.post("/qb-list-tax-codes", summary="List all VAT/tax codes in QuickBooks")
+async def qb_list_tax_codes(req: QBRealmRequest, _=Depends(_get_api_key)):
+    return await _run("qb_list_tax_codes", {"realm_id": req.realm_id})
+
+
+@router.post("/qb-list-tax-rates", summary="List all tax rates in QuickBooks")
+async def qb_list_tax_rates(req: QBRealmRequest, _=Depends(_get_api_key)):
+    return await _run("qb_list_tax_rates", {"realm_id": req.realm_id})
+
+
+class QBListVendorsRequest(BaseModel):
+    realm_id: str = Field(description="QuickBooks company/realm ID")
+    active_only: bool = Field(default=True, description="Only active vendors")
+    max_results: int = Field(default=100, description="Max results")
+
+
+@router.post("/qb-list-vendors", summary="List QuickBooks vendors (suppliers)")
+async def qb_list_vendors(req: QBListVendorsRequest, _=Depends(_get_api_key)):
+    return await _run("qb_list_vendors", {"realm_id": req.realm_id, "active_only": req.active_only, "max_results": req.max_results})
+
+
+class QBSearchVendorsRequest(BaseModel):
+    realm_id: str = Field(description="QuickBooks company/realm ID")
+    name: str = Field(description="Vendor name to search for")
+
+
+@router.post("/qb-search-vendors", summary="Search QuickBooks vendors by name")
+async def qb_search_vendors(req: QBSearchVendorsRequest, _=Depends(_get_api_key)):
+    return await _run("qb_search_vendors", {"realm_id": req.realm_id, "name": req.name})
+
+
+class QBProfitAndLossRequest(BaseModel):
+    realm_id: str = Field(description="QuickBooks company/realm ID")
+    start_date: str | None = Field(default=None, description="Report start date YYYY-MM-DD")
+    end_date: str | None = Field(default=None, description="Report end date YYYY-MM-DD")
+
+
+@router.post("/qb-profit-and-loss", summary="Get a QuickBooks profit and loss report")
+async def qb_profit_and_loss(req: QBProfitAndLossRequest, _=Depends(_get_api_key)):
+    payload: dict = {"realm_id": req.realm_id}
+    if req.start_date: payload["start_date"] = req.start_date
+    if req.end_date: payload["end_date"] = req.end_date
+    return await _run("qb_profit_and_loss", payload)
+
+
+class QBBalanceSheetRequest(BaseModel):
+    realm_id: str = Field(description="QuickBooks company/realm ID")
+    report_date: str | None = Field(default=None, description="As-of date YYYY-MM-DD (defaults to today)")
+
+
+@router.post("/qb-balance-sheet", summary="Get a QuickBooks balance sheet report")
+async def qb_balance_sheet(req: QBBalanceSheetRequest, _=Depends(_get_api_key)):
+    payload: dict = {"realm_id": req.realm_id}
+    if req.report_date: payload["report_date"] = req.report_date
+    return await _run("qb_balance_sheet", payload)
+
+
+# =====================
 # Agent Management
 # =====================
 

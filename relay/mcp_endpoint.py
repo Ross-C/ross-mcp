@@ -1373,6 +1373,469 @@ async def mp_list_activities(customer_id: int | None = None, project_id: int | N
     return json.dumps(result, indent=2)
 
 
+# --- QuickBooks Tools ---
+
+
+@mcp.tool()
+async def qb_list_companies() -> str:
+    """List all QuickBooks companies connected to Ross's account. Returns realm IDs needed for other QB operations.
+    """
+    result = await _send("qb_list_companies")
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def qb_get_company_info(realm_id: str) -> str:
+    """Get company information from QuickBooks.
+
+    Args:
+        realm_id: The QuickBooks company/realm ID (from qb_list_companies)
+    """
+    result = await _send("qb_get_company_info", {"realm_id": realm_id})
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def qb_list_customers(
+    realm_id: str,
+    active_only: bool = True,
+    max_results: int = 100,
+) -> str:
+    """List customers in QuickBooks.
+
+    Args:
+        realm_id: The QuickBooks company/realm ID
+        active_only: Only return active customers (default true)
+        max_results: Max customers to return (default 100)
+    """
+    result = await _send("qb_list_customers", {"realm_id": realm_id, "active_only": active_only, "max_results": max_results})
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def qb_get_customer(realm_id: str, customer_id: str) -> str:
+    """Get a specific QuickBooks customer by ID.
+
+    Args:
+        realm_id: The QuickBooks company/realm ID
+        customer_id: The customer ID (from qb_list_customers)
+    """
+    result = await _send("qb_get_customer", {"realm_id": realm_id, "customer_id": customer_id})
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def qb_search_customers(realm_id: str, name: str) -> str:
+    """Search QuickBooks customers by display name.
+
+    Args:
+        realm_id: The QuickBooks company/realm ID
+        name: Name to search for (partial match)
+    """
+    result = await _send("qb_search_customers", {"realm_id": realm_id, "name": name})
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def qb_create_customer(
+    realm_id: str,
+    display_name: str,
+    email: str | None = None,
+    phone: str | None = None,
+    company_name: str | None = None,
+) -> str:
+    """Create a new customer in QuickBooks.
+
+    Args:
+        realm_id: The QuickBooks company/realm ID
+        display_name: Customer display name
+        email: Customer email address
+        phone: Customer phone number
+        company_name: Company name
+    """
+    payload: dict = {"realm_id": realm_id, "display_name": display_name}
+    if email:
+        payload["email"] = email
+    if phone:
+        payload["phone"] = phone
+    if company_name:
+        payload["company_name"] = company_name
+    result = await _send("qb_create_customer", payload)
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def qb_list_invoices(
+    realm_id: str,
+    max_results: int = 20,
+    status: str | None = None,
+) -> str:
+    """List invoices in QuickBooks.
+
+    Args:
+        realm_id: The QuickBooks company/realm ID
+        max_results: Max invoices to return (default 20)
+        status: Filter by status: paid, unpaid, or overdue (optional)
+    """
+    payload: dict = {"realm_id": realm_id, "max_results": max_results}
+    if status:
+        payload["status"] = status
+    result = await _send("qb_list_invoices", payload)
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def qb_get_invoice(realm_id: str, invoice_id: str) -> str:
+    """Get a specific QuickBooks invoice with line items.
+
+    Args:
+        realm_id: The QuickBooks company/realm ID
+        invoice_id: The invoice ID (from qb_list_invoices)
+    """
+    result = await _send("qb_get_invoice", {"realm_id": realm_id, "invoice_id": invoice_id})
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def qb_create_invoice(
+    realm_id: str,
+    customer_id: str,
+    line_items: list[dict],
+    due_date: str | None = None,
+    invoice_number: str | None = None,
+    memo: str | None = None,
+) -> str:
+    """Create a new invoice in QuickBooks.
+
+    Args:
+        realm_id: The QuickBooks company/realm ID
+        customer_id: Customer ID to invoice
+        line_items: List of line items, each with: description, amount, quantity (default 1), item_id (optional), tax_code_id (optional)
+        due_date: Due date in YYYY-MM-DD format
+        invoice_number: Custom invoice number
+        memo: Customer memo on the invoice
+    """
+    payload: dict = {"realm_id": realm_id, "customer_id": customer_id, "line_items": line_items}
+    if due_date:
+        payload["due_date"] = due_date
+    if invoice_number:
+        payload["invoice_number"] = invoice_number
+    if memo:
+        payload["memo"] = memo
+    result = await _send("qb_create_invoice", payload)
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def qb_list_payments(realm_id: str, max_results: int = 20) -> str:
+    """List recent payments in QuickBooks.
+
+    Args:
+        realm_id: The QuickBooks company/realm ID
+        max_results: Max payments to return (default 20)
+    """
+    result = await _send("qb_list_payments", {"realm_id": realm_id, "max_results": max_results})
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def qb_get_payment(realm_id: str, payment_id: str) -> str:
+    """Get a specific QuickBooks payment by ID.
+
+    Args:
+        realm_id: The QuickBooks company/realm ID
+        payment_id: The payment ID (from qb_list_payments)
+    """
+    result = await _send("qb_get_payment", {"realm_id": realm_id, "payment_id": payment_id})
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def qb_create_payment(
+    realm_id: str,
+    customer_id: str,
+    total_amount: float,
+    invoice_id: str | None = None,
+    payment_date: str | None = None,
+    payment_method: str | None = None,
+) -> str:
+    """Record a payment in QuickBooks against a customer (and optionally an invoice).
+
+    Args:
+        realm_id: The QuickBooks company/realm ID
+        customer_id: Customer ID
+        total_amount: Payment amount
+        invoice_id: Invoice ID to apply payment to (optional)
+        payment_date: Payment date in YYYY-MM-DD format (optional)
+        payment_method: Payment method (optional)
+    """
+    payload: dict = {"realm_id": realm_id, "customer_id": customer_id, "total_amount": total_amount}
+    if invoice_id:
+        payload["invoice_id"] = invoice_id
+    if payment_date:
+        payload["payment_date"] = payment_date
+    if payment_method:
+        payload["payment_method"] = payment_method
+    result = await _send("qb_create_payment", payload)
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def qb_list_bills(
+    realm_id: str,
+    max_results: int = 20,
+    unpaid_only: bool = False,
+) -> str:
+    """List bills (supplier invoices) in QuickBooks. Use for VAT return purchase tracking.
+
+    Args:
+        realm_id: The QuickBooks company/realm ID
+        max_results: Max bills to return (default 20)
+        unpaid_only: Only return unpaid bills (default false)
+    """
+    result = await _send("qb_list_bills", {"realm_id": realm_id, "max_results": max_results, "unpaid_only": unpaid_only})
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def qb_get_bill(realm_id: str, bill_id: str) -> str:
+    """Get a specific QuickBooks bill (supplier invoice) with line items.
+
+    Args:
+        realm_id: The QuickBooks company/realm ID
+        bill_id: The bill ID (from qb_list_bills)
+    """
+    result = await _send("qb_get_bill", {"realm_id": realm_id, "bill_id": bill_id})
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def qb_create_bill(
+    realm_id: str,
+    vendor_id: str,
+    line_items: list[dict],
+    due_date: str | None = None,
+    memo: str | None = None,
+) -> str:
+    """Create a bill (expense from a supplier) in QuickBooks.
+
+    Args:
+        realm_id: The QuickBooks company/realm ID
+        vendor_id: Vendor/supplier ID
+        line_items: List of line items, each with: description, amount, account_id (expense account), tax_code_id (optional)
+        due_date: Due date in YYYY-MM-DD format
+        memo: Private note on the bill
+    """
+    payload: dict = {"realm_id": realm_id, "vendor_id": vendor_id, "line_items": line_items}
+    if due_date:
+        payload["due_date"] = due_date
+    if memo:
+        payload["memo"] = memo
+    result = await _send("qb_create_bill", payload)
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def qb_create_expense(
+    realm_id: str,
+    account_id: str,
+    line_items: list[dict],
+    vendor_id: str | None = None,
+    payment_type: str = "Cash",
+    memo: str | None = None,
+    txn_date: str | None = None,
+) -> str:
+    """Create an expense (purchase) in QuickBooks.
+
+    Args:
+        realm_id: The QuickBooks company/realm ID
+        account_id: Payment account ID (e.g. bank account)
+        line_items: List of line items, each with: description, amount, expense_account_id (category), tax_code_id (optional)
+        vendor_id: Vendor/supplier ID (optional)
+        payment_type: Cash, Check, or CreditCard (default Cash)
+        memo: Private note
+        txn_date: Transaction date in YYYY-MM-DD format
+    """
+    payload: dict = {"realm_id": realm_id, "account_id": account_id, "line_items": line_items, "payment_type": payment_type}
+    if vendor_id:
+        payload["vendor_id"] = vendor_id
+    if memo:
+        payload["memo"] = memo
+    if txn_date:
+        payload["txn_date"] = txn_date
+    result = await _send("qb_create_expense", payload)
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def qb_list_accounts(
+    realm_id: str,
+    account_type: str | None = None,
+    max_results: int = 100,
+) -> str:
+    """List accounts from the QuickBooks chart of accounts.
+
+    Args:
+        realm_id: The QuickBooks company/realm ID
+        account_type: Filter by type: Expense, Income, Bank, Asset (optional)
+        max_results: Max accounts to return (default 100)
+    """
+    payload: dict = {"realm_id": realm_id, "max_results": max_results}
+    if account_type:
+        payload["account_type"] = account_type
+    result = await _send("qb_list_accounts", payload)
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def qb_list_items(realm_id: str, max_results: int = 100) -> str:
+    """List items/services in QuickBooks (things you sell or buy).
+
+    Args:
+        realm_id: The QuickBooks company/realm ID
+        max_results: Max items to return (default 100)
+    """
+    result = await _send("qb_list_items", {"realm_id": realm_id, "max_results": max_results})
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def qb_get_item(realm_id: str, item_id: str) -> str:
+    """Get a specific QuickBooks item/service by ID.
+
+    Args:
+        realm_id: The QuickBooks company/realm ID
+        item_id: The item ID (from qb_list_items)
+    """
+    result = await _send("qb_get_item", {"realm_id": realm_id, "item_id": item_id})
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def qb_create_item(
+    realm_id: str,
+    name: str,
+    item_type: str = "Service",
+    income_account_id: str | None = None,
+    expense_account_id: str | None = None,
+    unit_price: float | None = None,
+    description: str | None = None,
+) -> str:
+    """Create an item/service in QuickBooks.
+
+    Args:
+        realm_id: The QuickBooks company/realm ID
+        name: Item name
+        item_type: Service, Inventory, or NonInventory (default Service)
+        income_account_id: Income account for sales
+        expense_account_id: Expense account for purchases
+        unit_price: Default unit price
+        description: Item description
+    """
+    payload: dict = {"realm_id": realm_id, "name": name, "item_type": item_type}
+    if income_account_id:
+        payload["income_account_id"] = income_account_id
+    if expense_account_id:
+        payload["expense_account_id"] = expense_account_id
+    if unit_price is not None:
+        payload["unit_price"] = unit_price
+    if description:
+        payload["description"] = description
+    result = await _send("qb_create_item", payload)
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def qb_list_tax_codes(realm_id: str) -> str:
+    """List all VAT/tax codes in QuickBooks.
+
+    Args:
+        realm_id: The QuickBooks company/realm ID
+    """
+    result = await _send("qb_list_tax_codes", {"realm_id": realm_id})
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def qb_list_tax_rates(realm_id: str) -> str:
+    """List all tax rates in QuickBooks.
+
+    Args:
+        realm_id: The QuickBooks company/realm ID
+    """
+    result = await _send("qb_list_tax_rates", {"realm_id": realm_id})
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def qb_list_vendors(
+    realm_id: str,
+    active_only: bool = True,
+    max_results: int = 100,
+) -> str:
+    """List vendors (suppliers) in QuickBooks.
+
+    Args:
+        realm_id: The QuickBooks company/realm ID
+        active_only: Only return active vendors (default true)
+        max_results: Max vendors to return (default 100)
+    """
+    result = await _send("qb_list_vendors", {"realm_id": realm_id, "active_only": active_only, "max_results": max_results})
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def qb_search_vendors(realm_id: str, name: str) -> str:
+    """Search QuickBooks vendors by display name.
+
+    Args:
+        realm_id: The QuickBooks company/realm ID
+        name: Vendor name to search for (partial match)
+    """
+    result = await _send("qb_search_vendors", {"realm_id": realm_id, "name": name})
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def qb_profit_and_loss(
+    realm_id: str,
+    start_date: str | None = None,
+    end_date: str | None = None,
+) -> str:
+    """Get a profit and loss report from QuickBooks.
+
+    Args:
+        realm_id: The QuickBooks company/realm ID
+        start_date: Report start date in YYYY-MM-DD format (optional)
+        end_date: Report end date in YYYY-MM-DD format (optional)
+    """
+    payload: dict = {"realm_id": realm_id}
+    if start_date:
+        payload["start_date"] = start_date
+    if end_date:
+        payload["end_date"] = end_date
+    result = await _send("qb_profit_and_loss", payload)
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def qb_balance_sheet(
+    realm_id: str,
+    report_date: str | None = None,
+) -> str:
+    """Get a balance sheet report from QuickBooks.
+
+    Args:
+        realm_id: The QuickBooks company/realm ID
+        report_date: Report as-of date in YYYY-MM-DD format (optional, defaults to today)
+    """
+    payload: dict = {"realm_id": realm_id}
+    if report_date:
+        payload["report_date"] = report_date
+    result = await _send("qb_balance_sheet", payload)
+    return json.dumps(result, indent=2)
+
+
 # --- Agent Management Tools ---
 
 

@@ -5,30 +5,15 @@
 2. **`agent/services/quickbooks.py`** — Full API service covering: company info, customers, invoices, payments, bills, expenses, accounts (chart of accounts), items/services, tax codes, tax rates, vendors, profit & loss, balance sheet. Async httpx, returns dicts. Follows the Gmail service pattern.
 3. **`.env` on both agents** — `QB_CLIENT_ID` and `QB_CLIENT_SECRET` added (sandbox credentials). Also `QB_SANDBOX=true` needs adding.
 
-## What's Remaining (4 tasks)
+## What's Remaining
 
-### Task 3: Add QuickBooks command types and payloads to `shared/messages.py`
-- Add `QB_*` CommandType enum values for every operation
-- Add corresponding Pydantic payload models
-- Every operation needs a `realm_id: str` parameter (company identifier)
-- Follow the existing pattern (Gmail, MP Portal sections)
-
-### Task 4: Wire QuickBooks into `agent/agent.py`
-- Import QuickBooksAuth and QuickBooksService
-- Instantiate in `__init__` (same pattern as google_auth/gmail)
-- Add capabilities conditionally in `connect()` (check `self.qb_auth.is_authenticated`)
-- Add match/case handlers in `_handle_message()` for every QB command
-
-### Task 5: Add QuickBooks MCP tools to `relay/mcp_endpoint.py`
-- Add `@mcp.tool()` functions for each operation
-- Use the `_send()` helper pattern
-- Return `json.dumps(result, indent=2)`
-- Good docstrings with Args sections
-
-### Task 6: Add QuickBooks REST endpoints to `relay/openai_endpoints.py`
-- Add Pydantic request models with Field descriptions
-- Add `@router.post()` endpoints using `_run()` helper
-- URL pattern: `/qb-list-invoices`, `/qb-get-customer`, etc.
+### Deploy and connect
+- Deploy relay (`fly deploy`) — messages.py changed so relay must go first
+- Restart both agents (Mac Mini + MacBook) so they load new code
+- Set `QB_SANDBOX=true` in agent `.env` files
+- Run OAuth flow on Mac Mini to connect RCSC Consulting's QuickBooks
+- Verify agents register QB capabilities via `agent_status`
+- Switch to production when ready (`QB_SANDBOX=false`)
 
 ## QuickBooks Operations to Wire
 
