@@ -1,5 +1,8 @@
 # Ross MCP — Virtual PA System
 
+## Portal activity mapping
+Not customer-related — do not log portal activity (this is Ross's own admin tooling).
+
 A virtual PA to help Ross manage admin bottlenecks. Accessible from Claude Code, Claude Desktop, ChatGPT, and voice (ElevenLabs agent via phone).
 
 ## Architecture
@@ -32,12 +35,19 @@ Or manually: `fly deploy` for relay, then use `update_agent` tool for agents.
 
 ## Adding New Tools
 
-When adding a new tool, update ALL of these:
+A new skill must be added **across the board** so Claude AND Sophie (11Labs) both get it. Update ALL of these:
 1. `shared/messages.py` — add CommandType enum value and payload model
-2. `agent/agent.py` — add capability to registration list + handler in `_handle_message`
-3. `relay/mcp_endpoint.py` — add `@mcp.tool()` function
-4. `relay/openai_endpoints.py` — add request model + endpoint
-5. ElevenLabs — create webhook tool via API pointing to `/api/tools/<slug>` and add to agent's `tool_ids`
+2. `agent/services/<service>.py` — the method that actually does the work (e.g. `mp_portal.py` for portal tools)
+3. `agent/agent.py` — add the CommandType to the **capabilities registration list** AND a handler case (both — a missing capability means the relay can't route to the agent)
+4. `relay/mcp_endpoint.py` — add `@mcp.tool()` function
+5. `relay/openai_endpoints.py` — add request model + endpoint (unless the skill is deliberately Claude-only, like activity logging)
+6. ElevenLabs — create webhook tool via API pointing to `/api/tools/<slug>` and add to agent's `tool_ids`
+7. `CAPABILITIES.md` — add the skill row (which surfaces it's on)
+
+**Then, every time (do not skip):**
+- **Propagate everywhere:** `git push`, `fly deploy` the relay, and **restart BOTH local agents** (Mac Mini + MacBook) so they load the new code — `ssh macbook` is set up for this. An agent that didn't restart is running old code.
+- **Fully test end to end** on each surface that exposes the skill — actually call it (e.g. via the MCP tool) and confirm the round trip. Don't assume; verify.
+- **PRODUCTION SAFETY (always remember):** the portal is the **live production app**. NEVER run `migrate:fresh`/`migrate:refresh`/`db:wipe`. Never drop or destructively alter data without explicit permission. Migrations must be additive; back up the prod DB before any schema change; flag anything destructive and get a yes first.
 
 ## Clients
 
