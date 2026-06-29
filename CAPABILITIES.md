@@ -8,6 +8,18 @@ What the agents can do, and on which surface. Review this periodically and tick 
 
 Both ultimately run through the local Mac agents. `✓` = available, `—` = not exposed on that surface.
 
+## Architecture — the two-agents + cloud workflow
+
+- **Two local Mac agents** (`mac-mini`, `macbook-pro`) in `agent/` do the real work (Apple / Outlook / Google / portal APIs) and each connects OUT to the relay.
+- **Cloud relay** on Fly.io (`ross-mcp-relay`, `relay/`) — the always-on hub. Exposes the **cloud MCP** (`relay/mcp_endpoint.py`) for Claude, and **ChatGPT/11Labs REST tools** (`relay/openai_endpoints.py`) for Sophie; routes each command to a connected agent.
+- **Clients:** local Claude Code + Claude Desktop/Web (cloud MCP), ChatGPT actions, and **Sophie** (ElevenLabs voice). All share the same agents via the relay.
+- **MP Portal** (`mp.portal-app.uk`, **production**) — the data the portal tools read/write: projects, tasks, customers, and the activity audit log. Token id 10 (all abilities) authenticates the agents to it.
+- **Activity logging:** run **`/link-customer`** in any repo to record which customer/project it maps to (writes a block into that repo's `CLAUDE.md`); Claude then logs dev work via `mp_log_activity`. See `~/CLAUDE.md`.
+
+> Keep this document current — updating it is part of the **"Adding New Tools"** checklist in `CLAUDE.md` (every new feature is added across all surfaces, both agents restarted, fully tested, no data loss).
+
+## Skill matrix
+
 | Skill | Claude | Sophie | Verified |
 |---|:--:|:--:|:--:|
 | **Reminders** | | | |
