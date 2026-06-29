@@ -11,3 +11,6 @@ Rollback to previous: `python3 elevenlabs/rollback.py sophie-before-20260629-133
 - Prompt: added WORK & TASKS + DAILY BRIEF sections; spoken-style rules (no markdown, money in words); broadened confirm-before-action to tasks/deploy-bill/tickets
 - NOT applied: enable_parallel_tool_calls (rejected for this agent — revisit)
 - Snapshots: before=`sophie-before-20260629-133943.json`, after=`sophie-after-20260629-134536.json`
+
+## 20260629-141001 — revert empty first_message (startup latency)
+- first_message restored to "Hey Ross, what can I do for you?" so the greeting is spoken instantly (empty first_message made the LLM generate it first, causing a long delay before she talks). All other refinements kept.
