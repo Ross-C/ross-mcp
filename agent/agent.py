@@ -75,6 +75,9 @@ from shared.messages import (
     MPGetTaskPayload,
     MPUpdateTaskPayload,
     MPSearchTasksPayload,
+    MPListCustomersPayload,
+    MPGetCustomerPayload,
+    MPCreateCustomerPayload,
     DailyBriefPayload,
     UpdateAgentPayload,
 )
@@ -476,6 +479,15 @@ class Agent:
                 case CommandType.MP_SEARCH_TASKS:
                     p = MPSearchTasksPayload(**cmd.payload)
                     result = await self.mp_portal.search_tasks(query=p.query)
+                case CommandType.MP_LIST_CUSTOMERS:
+                    p = MPListCustomersPayload(**cmd.payload)
+                    result = await self.mp_portal.list_customers(q=p.q)
+                case CommandType.MP_GET_CUSTOMER:
+                    p = MPGetCustomerPayload(**cmd.payload)
+                    result = await self.mp_portal.get_customer(customer_id=p.customer_id)
+                case CommandType.MP_CREATE_CUSTOMER:
+                    p = MPCreateCustomerPayload(**cmd.payload)
+                    result = await self.mp_portal.create_customer(**p.model_dump())
                 case CommandType.MP_IN_PROGRESS_TASKS:
                     result = await self.mp_portal.get_in_progress_tasks()
                 case CommandType.MP_MY_TASKS:

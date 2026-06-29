@@ -358,3 +358,28 @@ class MPPortalService:
             resp = await client.get(f"{self.api_base}/activity/recent", headers=self._headers())
             resp.raise_for_status()
             return resp.json()
+
+    # --- Customers ---
+
+    async def list_customers(self, q: str | None = None) -> dict:
+        """List or search customers (id, name, company, city, postcode, email, phone)."""
+        params = {"q": q} if q else {}
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.get(f"{self.api_base}/customers", headers=self._headers(), params=params)
+            resp.raise_for_status()
+            return resp.json()
+
+    async def get_customer(self, customer_id: int) -> dict:
+        """Look up one customer with full site and invoice address."""
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.get(f"{self.api_base}/customers/{customer_id}", headers=self._headers())
+            resp.raise_for_status()
+            return resp.json()
+
+    async def create_customer(self, **fields) -> dict:
+        """Create a customer. Omits keys whose value is None."""
+        payload = {k: v for k, v in fields.items() if v is not None}
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.post(f"{self.api_base}/customers", headers=self._headers(), json=payload)
+            resp.raise_for_status()
+            return resp.json()

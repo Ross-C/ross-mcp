@@ -1231,6 +1231,96 @@ async def mp_activity_recent() -> str:
     return json.dumps(result, indent=2)
 
 
+@mcp.tool()
+async def mp_list_customers(q: str | None = None) -> str:
+    """List or search customers in the MP Portal (id, name, company, city, postcode, email, phone). Pass q to search by company, name, email or postcode. Use this to find an existing customer before creating one.
+
+    Args:
+        q: Optional search term.
+    """
+    payload: dict = {}
+    if q:
+        payload["q"] = q
+    result = await _send("mp_list_customers", payload)
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def mp_get_customer(customer_id: int) -> str:
+    """Look up one MP Portal customer by id, with full site and invoice address, phone, email and website.
+
+    Args:
+        customer_id: The portal customer id.
+    """
+    result = await _send("mp_get_customer", {"customer_id": customer_id})
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def mp_create_customer(
+    name: str,
+    company_name: str | None = None,
+    address_line_1: str | None = None,
+    address_line_2: str | None = None,
+    city: str | None = None,
+    county: str | None = None,
+    postcode: str | None = None,
+    invoice_same_as_site: bool = True,
+    invoice_address_line_1: str | None = None,
+    invoice_address_line_2: str | None = None,
+    invoice_city: str | None = None,
+    invoice_county: str | None = None,
+    invoice_postcode: str | None = None,
+    email: str | None = None,
+    phone: str | None = None,
+    website: str | None = None,
+    notes: str | None = None,
+) -> str:
+    """Create a new customer in the MP Portal with full site and invoice address. ALWAYS read the full details back to Ross and get his explicit agreement before calling — this inserts a customer record. Run mp_list_customers first to avoid duplicates. Provide the site address; set invoice_same_as_site false and supply invoice_* fields only if the billing address differs.
+
+    Args:
+        name: Customer/company name (required).
+        company_name: Company name if different from name.
+        address_line_1: Site address line 1.
+        address_line_2: Site address line 2.
+        city: Site town/city.
+        county: Site county.
+        postcode: Site postcode.
+        invoice_same_as_site: True if the invoice address matches the site address (default true).
+        invoice_address_line_1: Invoice address line 1 (only if different).
+        invoice_address_line_2: Invoice address line 2.
+        invoice_city: Invoice town/city.
+        invoice_county: Invoice county.
+        invoice_postcode: Invoice postcode.
+        email: Contact email.
+        phone: Contact phone.
+        website: Website.
+        notes: Free-text notes.
+    """
+    payload: dict = {"name": name, "invoice_same_as_site": invoice_same_as_site}
+    for key, value in {
+        "company_name": company_name,
+        "address_line_1": address_line_1,
+        "address_line_2": address_line_2,
+        "city": city,
+        "county": county,
+        "postcode": postcode,
+        "invoice_address_line_1": invoice_address_line_1,
+        "invoice_address_line_2": invoice_address_line_2,
+        "invoice_city": invoice_city,
+        "invoice_county": invoice_county,
+        "invoice_postcode": invoice_postcode,
+        "email": email,
+        "phone": phone,
+        "website": website,
+        "notes": notes,
+    }.items():
+        if value is not None:
+            payload[key] = value
+    result = await _send("mp_create_customer", payload)
+    return json.dumps(result, indent=2)
+
+
 # --- Agent Management Tools ---
 
 

@@ -83,6 +83,9 @@ class CommandType(str, Enum):
     MP_OUTSTANDING_BY_PROJECT = "mp_outstanding_by_project"
     MP_BILLABLE_SUMMARY = "mp_billable_summary"
     MP_ACTIVITY_RECENT = "mp_activity_recent"
+    MP_LIST_CUSTOMERS = "mp_list_customers"
+    MP_GET_CUSTOMER = "mp_get_customer"
+    MP_CREATE_CUSTOMER = "mp_create_customer"
     # Composite
     DAILY_BRIEF = "daily_brief"
     # System
@@ -423,6 +426,34 @@ class MPUpdateTaskPayload(BaseModel):
 
 class MPSearchTasksPayload(BaseModel):
     query: str
+
+
+class MPListCustomersPayload(BaseModel):
+    q: str | None = None
+
+
+class MPGetCustomerPayload(BaseModel):
+    customer_id: int
+
+
+class MPCreateCustomerPayload(BaseModel):
+    name: str
+    company_name: str | None = None
+    address_line_1: str | None = None
+    address_line_2: str | None = None
+    city: str | None = None
+    county: str | None = None
+    postcode: str | None = None
+    invoice_same_as_site: bool = True
+    invoice_address_line_1: str | None = None
+    invoice_address_line_2: str | None = None
+    invoice_city: str | None = None
+    invoice_county: str | None = None
+    invoice_postcode: str | None = None
+    email: str | None = None
+    phone: str | None = None
+    website: str | None = None
+    notes: str | None = None
 
 
 class DailyBriefPayload(BaseModel):

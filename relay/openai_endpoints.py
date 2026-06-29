@@ -946,6 +946,51 @@ async def mp_activity_recent(_=Depends(_get_api_key)):
     return await _run("mp_activity_recent")
 
 
+class MPListCustomersRequest(BaseModel):
+    q: str | None = Field(default=None, description="Optional search term (company, name, email or postcode)")
+
+
+@router.post("/mp-list-customers", summary="List or search MP Portal customers. Use to find an existing customer before creating one.")
+async def mp_list_customers(req: MPListCustomersRequest, _=Depends(_get_api_key)):
+    payload = {"q": req.q} if req.q else {}
+    return await _run("mp_list_customers", payload)
+
+
+class MPGetCustomerRequest(BaseModel):
+    customer_id: int = Field(description="The portal customer id")
+
+
+@router.post("/mp-get-customer", summary="Get one MP Portal customer with full site and invoice address")
+async def mp_get_customer(req: MPGetCustomerRequest, _=Depends(_get_api_key)):
+    return await _run("mp_get_customer", {"customer_id": req.customer_id})
+
+
+class MPCreateCustomerRequest(BaseModel):
+    name: str = Field(description="Customer/company name (required)")
+    company_name: str | None = Field(default=None, description="Company name if different from name")
+    address_line_1: str | None = Field(default=None, description="Site address line 1")
+    address_line_2: str | None = Field(default=None, description="Site address line 2")
+    city: str | None = Field(default=None, description="Site town/city")
+    county: str | None = Field(default=None, description="Site county")
+    postcode: str | None = Field(default=None, description="Site postcode")
+    invoice_same_as_site: bool = Field(default=True, description="True if the invoice address matches the site address")
+    invoice_address_line_1: str | None = Field(default=None, description="Invoice address line 1 (only if different)")
+    invoice_address_line_2: str | None = Field(default=None, description="Invoice address line 2")
+    invoice_city: str | None = Field(default=None, description="Invoice town/city")
+    invoice_county: str | None = Field(default=None, description="Invoice county")
+    invoice_postcode: str | None = Field(default=None, description="Invoice postcode")
+    email: str | None = Field(default=None, description="Contact email")
+    phone: str | None = Field(default=None, description="Contact phone")
+    website: str | None = Field(default=None, description="Website")
+    notes: str | None = Field(default=None, description="Free-text notes")
+
+
+@router.post("/mp-create-customer", summary="Create a new MP Portal customer with full address. Confirm the full details with Ross before calling — this inserts a customer.")
+async def mp_create_customer(req: MPCreateCustomerRequest, _=Depends(_get_api_key)):
+    payload = {k: v for k, v in req.model_dump().items() if v is not None}
+    return await _run("mp_create_customer", payload)
+
+
 # =====================
 # Agent Management
 # =====================
