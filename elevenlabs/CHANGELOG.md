@@ -28,3 +28,6 @@ Rollback to previous: `python3 elevenlabs/rollback.py sophie-before-20260629-133
 - Prompt: added WARMTH FIRST rule (brief but friendly/upbeat, never curt or flat).
 - Voice model eleven_flash_v2 -> **eleven_turbo_v2** (warmer/more expressive; English agents are limited to turbo or flash v2).
 - Rollback if she feels too slow: `python3 elevenlabs/rollback.py elevenlabs/backups/<a flash_v2 snapshot>.json`.
+
+## 20260629-142631 — stop premature check-in
+- Removed the "check in after long silence" rule (it fired at the 2s turn timeout, before Ross spoke). She now stays silent when he is quiet; the 30s silence_end_call_timeout ends an abandoned call.
