@@ -78,6 +78,8 @@ from shared.messages import (
     MPListCustomersPayload,
     MPGetCustomerPayload,
     MPCreateCustomerPayload,
+    MPLogActivityPayload,
+    MPListActivitiesPayload,
     DailyBriefPayload,
     UpdateAgentPayload,
 )
@@ -488,6 +490,12 @@ class Agent:
                 case CommandType.MP_CREATE_CUSTOMER:
                     p = MPCreateCustomerPayload(**cmd.payload)
                     result = await self.mp_portal.create_customer(**p.model_dump())
+                case CommandType.MP_LOG_ACTIVITY:
+                    p = MPLogActivityPayload(**cmd.payload)
+                    result = await self.mp_portal.log_activity(**p.model_dump())
+                case CommandType.MP_LIST_ACTIVITIES:
+                    p = MPListActivitiesPayload(**cmd.payload)
+                    result = await self.mp_portal.list_activities(customer_id=p.customer_id, project_id=p.project_id)
                 case CommandType.MP_IN_PROGRESS_TASKS:
                     result = await self.mp_portal.get_in_progress_tasks()
                 case CommandType.MP_MY_TASKS:

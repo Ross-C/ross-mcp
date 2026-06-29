@@ -86,6 +86,8 @@ class CommandType(str, Enum):
     MP_LIST_CUSTOMERS = "mp_list_customers"
     MP_GET_CUSTOMER = "mp_get_customer"
     MP_CREATE_CUSTOMER = "mp_create_customer"
+    MP_LOG_ACTIVITY = "mp_log_activity"
+    MP_LIST_ACTIVITIES = "mp_list_activities"
     # Composite
     DAILY_BRIEF = "daily_brief"
     # System
@@ -454,6 +456,21 @@ class MPCreateCustomerPayload(BaseModel):
     phone: str | None = None
     website: str | None = None
     notes: str | None = None
+
+
+class MPLogActivityPayload(BaseModel):
+    customer_id: int
+    title: str
+    description: str | None = None
+    project_id: int | None = None
+    task_id: int | None = None
+    source: str | None = None
+    occurred_at: str | None = None
+
+
+class MPListActivitiesPayload(BaseModel):
+    customer_id: int | None = None
+    project_id: int | None = None
 
 
 class DailyBriefPayload(BaseModel):

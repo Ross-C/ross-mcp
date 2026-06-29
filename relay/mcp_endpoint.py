@@ -1321,6 +1321,55 @@ async def mp_create_customer(
     return json.dumps(result, indent=2)
 
 
+@mcp.tool()
+async def mp_log_activity(
+    customer_id: int,
+    title: str,
+    description: str | None = None,
+    project_id: int | None = None,
+    task_id: int | None = None,
+    source: str | None = None,
+) -> str:
+    """Append ONE granular software-development work item to a customer's activity audit trail. Call this for each discrete thing done when the work relates to a portal customer. `title` is a short headline (the feature name or task description); `description` is the expandable detail of what actually changed (files, behaviour, fixes). customer_id is required; pass project_id when the work belongs to a project and task_id when it relates to an existing task (there is often no task — that's fine). This is a customer audit trail, NOT the personal task system.
+
+    Args:
+        customer_id: Portal customer id (required).
+        title: Short headline — the feature name or task description.
+        description: Expandable detail: what actually changed (files, behaviour, fixes).
+        project_id: Portal project id, if the work belongs to a project.
+        task_id: Portal task id, if the work relates to an existing task.
+        source: Where it came from, e.g. 'Claude Code — Mac Mini'.
+    """
+    payload: dict = {"customer_id": customer_id, "title": title}
+    for key, value in {
+        "description": description,
+        "project_id": project_id,
+        "task_id": task_id,
+        "source": source,
+    }.items():
+        if value is not None:
+            payload[key] = value
+    result = await _send("mp_log_activity", payload)
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+async def mp_list_activities(customer_id: int | None = None, project_id: int | None = None) -> str:
+    """Read the software-development activity audit trail. Pass customer_id for a customer's whole trail, or project_id for one project's trail.
+
+    Args:
+        customer_id: Portal customer id (for the customer's whole trail).
+        project_id: Portal project id (for one project's trail).
+    """
+    payload: dict = {}
+    if customer_id:
+        payload["customer_id"] = customer_id
+    if project_id:
+        payload["project_id"] = project_id
+    result = await _send("mp_list_activities", payload)
+    return json.dumps(result, indent=2)
+
+
 # --- Agent Management Tools ---
 
 

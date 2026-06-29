@@ -383,3 +383,24 @@ class MPPortalService:
             resp = await client.post(f"{self.api_base}/customers", headers=self._headers(), json=payload)
             resp.raise_for_status()
             return resp.json()
+
+    # --- Activity audit trail ---
+
+    async def log_activity(self, **fields) -> dict:
+        """Append a granular work item to a customer's activity audit trail."""
+        payload = {k: v for k, v in fields.items() if v is not None}
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.post(f"{self.api_base}/activities", headers=self._headers(), json=payload)
+            resp.raise_for_status()
+            return resp.json()
+
+    async def list_activities(self, customer_id: int | None = None, project_id: int | None = None) -> dict:
+        """Read the activity audit trail for a project (if given) or a customer."""
+        if project_id:
+            path = f"{self.api_base}/projects/{project_id}/activities"
+        else:
+            path = f"{self.api_base}/customers/{customer_id}/activities"
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.get(path, headers=self._headers())
+            resp.raise_for_status()
+            return resp.json()
