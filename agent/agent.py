@@ -99,7 +99,7 @@ from agent.services.enchant_rcsc import EnchantRCSCService
 from agent.services.mp_portal import MPPortalService
 from agent.services.daily_brief import DailyBriefService
 
-load_dotenv()
+load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"))
 LOG_DIR = Path.home() / "Library/Logs/mcp-agent"
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 
