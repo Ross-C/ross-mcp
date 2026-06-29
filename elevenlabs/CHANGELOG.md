@@ -23,3 +23,6 @@ Rollback to previous: `python3 elevenlabs/rollback.py sophie-before-20260629-133
 
 ## 20260629-142043 — slightly friendlier
 - Added a warmth/persona line to the system prompt; warmer fixed greeting ("Hey Ross, good to hear from you! What can I do for you?"); nudged TTS style up a touch if supported.
+
+## 20260629-142210 — fix "short and moody"
+- Prompt: added WARMTH FIRST rule (brief but friendly/upbeat, never curt/flat). Voice model eleven_flash_v2 -> eleven_turbo_v2_5 (warmer, more expressive). Rollback if too slow: restore a previous snapshot.
