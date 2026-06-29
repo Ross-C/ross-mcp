@@ -211,6 +211,11 @@ class Agent:
                             CommandType.MP_OUTSTANDING_BY_PROJECT,
                             CommandType.MP_BILLABLE_SUMMARY,
                             CommandType.MP_ACTIVITY_RECENT,
+                            CommandType.MP_LIST_CUSTOMERS,
+                            CommandType.MP_GET_CUSTOMER,
+                            CommandType.MP_CREATE_CUSTOMER,
+                            CommandType.MP_LOG_ACTIVITY,
+                            CommandType.MP_LIST_ACTIVITIES,
                         ])
                     if self.enchant_cbs.is_configured:
                         capabilities.extend([
