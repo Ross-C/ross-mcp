@@ -128,19 +128,18 @@ class DailyBriefService:
             fetch_reminders(), fetch_events(), fetch_ical_events()
         )
 
-        # Filter reminders due today or overdue (no due date = show them too)
+        # Filter to only reminders scheduled for today
         today_reminders = []
         for r in reminders_data:
             due = r.get("due_date")
-            if due:
-                try:
-                    due_dt = datetime.fromisoformat(due.replace("Z", "+00:00"))
-                    if due_dt.date() <= target.date():
-                        today_reminders.append(r)
-                except Exception:
+            if not due:
+                continue
+            try:
+                due_dt = datetime.fromisoformat(due.replace("Z", "+00:00"))
+                if due_dt.date() == target.date():
                     today_reminders.append(r)
-            else:
-                today_reminders.append(r)
+            except Exception:
+                pass
 
         # Sort reminders: high priority first, then by due date
         def reminder_sort_key(r):
