@@ -75,6 +75,7 @@ from shared.messages import (
     MPGetTaskPayload,
     MPUpdateTaskPayload,
     MPSearchTasksPayload,
+    DailyBriefPayload,
     UpdateAgentPayload,
 )
 from agent.services.reminders import RemindersService
@@ -91,6 +92,7 @@ from agent.services.documents import DocumentService
 from agent.services.enchant_cbs import EnchantCBSService
 from agent.services.enchant_rcsc import EnchantRCSCService
 from agent.services.mp_portal import MPPortalService
+from agent.services.daily_brief import DailyBriefService
 
 load_dotenv()
 LOG_DIR = Path.home() / "Library/Logs/mcp-agent"
@@ -124,6 +126,12 @@ class Agent:
         self.enchant_cbs = EnchantCBSService()
         self.enchant_rcsc = EnchantRCSCService()
         self.mp_portal = MPPortalService()
+        self.daily_brief = DailyBriefService(
+            reminders=self.reminders,
+            calendar=self.calendar,
+            apple_calendar=self.apple_calendar,
+            mp_portal=self.mp_portal,
+        )
         self._running = True
         self._version = self._get_git_version()
 
@@ -168,6 +176,7 @@ class Agent:
                         CommandType.GET_NOTE,
                         CommandType.CREATE_NOTE,
                         CommandType.LIST_NOTE_FOLDERS,
+                        CommandType.DAILY_BRIEF,
                         CommandType.UPDATE_AGENT,
                     CommandType.PING,
                     ]
@@ -484,6 +493,10 @@ class Agent:
                     result = await self.mp_portal.get_billable_summary()
                 case CommandType.MP_ACTIVITY_RECENT:
                     result = await self.mp_portal.get_recent_activity()
+                # --- Daily Brief ---
+                case CommandType.DAILY_BRIEF:
+                    p = DailyBriefPayload(**cmd.payload)
+                    result = await self.daily_brief.generate(date_str=p.date)
                 # --- Documents ---
                 case CommandType.CONVERT_MD_TO_PDF:
                     p = ConvertDocumentPayload(**cmd.payload)

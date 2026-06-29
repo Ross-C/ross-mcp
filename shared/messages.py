@@ -83,6 +83,8 @@ class CommandType(str, Enum):
     MP_OUTSTANDING_BY_PROJECT = "mp_outstanding_by_project"
     MP_BILLABLE_SUMMARY = "mp_billable_summary"
     MP_ACTIVITY_RECENT = "mp_activity_recent"
+    # Composite
+    DAILY_BRIEF = "daily_brief"
     # System
     UPDATE_AGENT = "update_agent"
     AGENT_STATUS = "agent_status"
@@ -421,6 +423,10 @@ class MPUpdateTaskPayload(BaseModel):
 
 class MPSearchTasksPayload(BaseModel):
     query: str
+
+
+class DailyBriefPayload(BaseModel):
+    date: str | None = None  # ISO date, defaults to today
 
 
 class UpdateAgentPayload(BaseModel):
