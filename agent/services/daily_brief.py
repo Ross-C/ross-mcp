@@ -146,7 +146,7 @@ class DailyBriefService:
         def reminder_sort_key(r):
             p = r.get("priority", 0)
             priority_order = {9: 0, 5: 1, 1: 2, 0: 3}
-            due = r.get("due_date", "9999")
+            due = r.get("due_date") or "9999"
             return (priority_order.get(p, 3), due)
 
         today_reminders.sort(key=reminder_sort_key)
