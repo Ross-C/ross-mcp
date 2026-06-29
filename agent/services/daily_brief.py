@@ -252,23 +252,28 @@ class DailyBriefService:
         date_slug = target.strftime("%d-%m-%Y")
         desktop = Path.home() / "Desktop"
         pdf_path = str(desktop / f"Daily Brief - {date_slug}.pdf")
-        tmp_html = Path("/tmp/daily_brief.html")
-        tmp_html.write_text(html, encoding="utf-8")
 
         try:
-            subprocess.run(
-                ["wkhtmltopdf", "--quiet", "--enable-local-file-access",
-                 "--encoding", "UTF-8",
-                 "--page-size", "A4",
-                 "--margin-top", "15mm", "--margin-bottom", "15mm",
-                 "--margin-left", "20mm", "--margin-right", "20mm",
-                 str(tmp_html), pdf_path],
-                capture_output=True, text=True, timeout=30, check=True,
-            )
-        except FileNotFoundError:
-            return {"error": "wkhtmltopdf not installed. Run: brew install wkhtmltopdf"}
-        except subprocess.CalledProcessError as e:
-            return {"error": f"PDF conversion failed: {e.stderr[:200]}"}
+            from weasyprint import HTML
+            HTML(string=html).write_pdf(pdf_path)
+        except ImportError:
+            # Fallback to wkhtmltopdf if weasyprint not installed
+            tmp_html = Path("/tmp/daily_brief.html")
+            tmp_html.write_text(html, encoding="utf-8")
+            try:
+                subprocess.run(
+                    ["wkhtmltopdf", "--quiet", "--enable-local-file-access",
+                     "--encoding", "UTF-8",
+                     "--page-size", "A4",
+                     "--margin-top", "15mm", "--margin-bottom", "15mm",
+                     "--margin-left", "20mm", "--margin-right", "20mm",
+                     str(tmp_html), pdf_path],
+                    capture_output=True, text=True, timeout=30, check=True,
+                )
+            except FileNotFoundError:
+                return {"error": "Neither weasyprint nor wkhtmltopdf available."}
+            except subprocess.CalledProcessError as e:
+                return {"error": f"PDF conversion failed: {e.stderr[:200]}"}
 
         pdf_size = Path(pdf_path).stat().st_size
 
