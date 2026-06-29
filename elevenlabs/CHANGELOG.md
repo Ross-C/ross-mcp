@@ -14,3 +14,6 @@ Rollback to previous: `python3 elevenlabs/rollback.py sophie-before-20260629-133
 
 ## 20260629-141001 — revert empty first_message (startup latency)
 - first_message restored to "Hey Ross, what can I do for you?" so the greeting is spoken instantly (empty first_message made the LLM generate it first, causing a long delay before she talks). All other refinements kept.
+
+## 20260629-141444 — revert text normalisation to system_prompt (latency)
+- text_normalisation_type elevenlabs -> system_prompt to drop a per-reply processing step (Ross felt responses were a touch slower). The "speak money/refs in words, no markdown" rule is already in the prompt, so spoken correctness is kept.
