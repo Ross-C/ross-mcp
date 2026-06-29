@@ -18,8 +18,6 @@ h1 { font-size: 18pt; margin: 0 0 4px 0; color: #1a1a1a; }
 h2 { font-size: 13pt; color: #fff; background: #2c3e50; padding: 6px 12px; border-radius: 4px; margin: 18px 0 8px 0; }
 h2.meetings { background: #2980b9; }
 h2.reminders { background: #27ae60; }
-h2.dev-tasks { background: #8e44ad; }
-h2.overdue { background: #c0392b; }
 .item { display: flex; align-items: flex-start; margin: 4px 0; padding: 5px 8px; border-bottom: 1px solid #eee; }
 .checkbox { width: 14px; height: 14px; border: 2px solid #999; border-radius: 2px; margin-right: 10px; margin-top: 2px; flex-shrink: 0; }
 .item-content { flex: 1; }
@@ -44,8 +42,7 @@ BRIEF_HTML = '''<!DOCTYPE html>
 <div class="date">{date_display}</div>
 <div class="summary">
 <strong>{meeting_count}</strong> meeting{meeting_s} &nbsp;|&nbsp;
-<strong>{reminder_count}</strong> reminder{reminder_s} &nbsp;|&nbsp;
-<strong>{task_count}</strong> dev task{task_s}{overdue_text}
+<strong>{reminder_count}</strong> reminder{reminder_s}
 </div>
 {sections}
 <div class="footer">Generated {generated_at}</div>
@@ -72,11 +69,10 @@ def _format_date_display(dt: datetime) -> str:
 
 
 class DailyBriefService:
-    def __init__(self, reminders, calendar, apple_calendar, mp_portal):
+    def __init__(self, reminders, calendar, apple_calendar):
         self.reminders = reminders
         self.calendar = calendar
         self.apple_calendar = apple_calendar
-        self.mp_portal = mp_portal
 
     async def generate(self, date_str: str | None = None) -> dict:
         """Generate the daily brief PDF for the given date (defaults to today)."""
@@ -98,8 +94,6 @@ class DailyBriefService:
         reminders_data = []
         events_data = []
         ical_events_data = []
-        in_progress_data = []
-        overdue_data = []
 
         async def fetch_reminders():
             nonlocal reminders_data
@@ -130,19 +124,8 @@ class DailyBriefService:
             except Exception as e:
                 logger.warning(f"Failed to fetch iCloud events: {e}")
 
-        async def fetch_tasks():
-            nonlocal in_progress_data, overdue_data
-            try:
-                if self.mp_portal.is_configured:
-                    ip_result = await self.mp_portal.get_in_progress_tasks()
-                    in_progress_data = ip_result.get("tasks", []) if isinstance(ip_result, dict) else []
-                    od_result = await self.mp_portal.get_overdue_tasks()
-                    overdue_data = od_result.get("tasks", []) if isinstance(od_result, dict) else []
-            except Exception as e:
-                logger.warning(f"Failed to fetch MP tasks: {e}")
-
         await asyncio.gather(
-            fetch_reminders(), fetch_events(), fetch_ical_events(), fetch_tasks()
+            fetch_reminders(), fetch_events(), fetch_ical_events()
         )
 
         # Filter reminders due today or overdue (no due date = show them too)
@@ -177,10 +160,6 @@ class DailyBriefService:
             e["_source"] = "icloud"
             all_events.append(e)
         all_events.sort(key=lambda e: e.get("start", "") or "")
-
-        # Deduplicate overdue tasks that are also in-progress
-        ip_ids = {t.get("id") for t in in_progress_data}
-        unique_overdue = [t for t in overdue_data if t.get("id") not in ip_ids]
 
         # Build HTML sections
         sections = []
@@ -256,57 +235,7 @@ class DailyBriefService:
         else:
             sections.append('<div class="empty">No reminders due today.</div>')
 
-        # Dev tasks section (in progress)
-        if in_progress_data:
-            sections.append('<h2 class="dev-tasks">Dev Tasks (In Progress)</h2>')
-            for t in in_progress_data:
-                ref = t.get("reference") or t.get("project_task_id") or ""
-                title = t.get("title", "Untitled")
-                project = t.get("project_name") or t.get("project", {}).get("name", "")
-                due = t.get("customer_due_date", "")
-                meta_parts = []
-                if ref:
-                    meta_parts.append(ref)
-                if project:
-                    meta_parts.append(project)
-                if due:
-                    meta_parts.append(f"Due: {due}")
-                meta = " · ".join(meta_parts)
-
-                sections.append(f'''<div class="item">
-<div class="checkbox"></div>
-<div class="item-content">
-<div class="item-title">{title}</div>
-{f'<div class="item-meta">{meta}</div>' if meta else ''}
-</div></div>''')
-
-        # Overdue tasks section
-        if unique_overdue:
-            sections.append('<h2 class="overdue">Overdue Tasks</h2>')
-            for t in unique_overdue:
-                ref = t.get("reference") or t.get("project_task_id") or ""
-                title = t.get("title", "Untitled")
-                project = t.get("project_name") or t.get("project", {}).get("name", "")
-                due = t.get("customer_due_date", "")
-                meta_parts = []
-                if ref:
-                    meta_parts.append(ref)
-                if project:
-                    meta_parts.append(project)
-                if due:
-                    meta_parts.append(f"Was due: {due}")
-                meta = " · ".join(meta_parts)
-
-                sections.append(f'''<div class="item priority-high">
-<div class="checkbox"></div>
-<div class="item-content">
-<div class="item-title">{title}</div>
-{f'<div class="item-meta">{meta}</div>' if meta else ''}
-</div></div>''')
-
         # Build the full HTML
-        overdue_text = f" &nbsp;|&nbsp; <strong style='color:#c0392b'>{len(unique_overdue)}</strong> overdue" if unique_overdue else ""
-        task_count = len(in_progress_data)
 
         html = BRIEF_HTML.format(
             css=BRIEF_CSS,
@@ -315,9 +244,6 @@ class DailyBriefService:
             meeting_s=_plural(len(all_events)),
             reminder_count=len(today_reminders),
             reminder_s=_plural(len(today_reminders)),
-            task_count=task_count,
-            task_s=_plural(task_count),
-            overdue_text=overdue_text,
             sections="\n".join(sections),
             generated_at=now.strftime("%H:%M on %d/%m/%Y"),
         )
@@ -348,7 +274,7 @@ class DailyBriefService:
 
         # Build text summary for voice/chat interfaces
         summary_lines = [f"Daily Brief for {_format_date_display(target)}:"]
-        summary_lines.append(f"{len(all_events)} meeting{_plural(len(all_events))}, {len(today_reminders)} reminder{_plural(len(today_reminders))}, {task_count} dev task{_plural(task_count)}.")
+        summary_lines.append(f"{len(all_events)} meeting{_plural(len(all_events))}, {len(today_reminders)} reminder{_plural(len(today_reminders))}.")
 
         if all_events:
             summary_lines.append("Meetings:")
@@ -366,16 +292,11 @@ class DailyBriefService:
             if len(today_reminders) > 5:
                 summary_lines.append(f"  ...and {len(today_reminders) - 5} more")
 
-        if unique_overdue:
-            summary_lines.append(f"{len(unique_overdue)} overdue task{_plural(len(unique_overdue))}.")
-
         return {
             "pdf_path": pdf_path,
             "pdf_size_bytes": pdf_size,
             "summary": "\n".join(summary_lines),
             "meetings": len(all_events),
             "reminders": len(today_reminders),
-            "dev_tasks": task_count,
-            "overdue_tasks": len(unique_overdue),
             "date": target.strftime("%Y-%m-%d"),
         }

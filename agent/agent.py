@@ -130,7 +130,6 @@ class Agent:
             reminders=self.reminders,
             calendar=self.calendar,
             apple_calendar=self.apple_calendar,
-            mp_portal=self.mp_portal,
         )
         self._running = True
         self._version = self._get_git_version()
