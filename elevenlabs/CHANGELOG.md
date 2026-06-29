@@ -20,3 +20,6 @@ Rollback to previous: `python3 elevenlabs/rollback.py sophie-before-20260629-133
 
 ## 20260629-141851 — silence handling: snappy turns, no quick "still there"
 - Kept turn_timeout 2.0s (fast replies). Added prompt rule: stay silent on normal pauses; only after a long silence give ONE brief check-in; let the 30s silence_end_call_timeout end an abandoned call.
+
+## 20260629-142043 — slightly friendlier
+- Added a warmth/persona line to the system prompt; warmer fixed greeting ("Hey Ross, good to hear from you! What can I do for you?"); nudged TTS style up a touch if supported.
