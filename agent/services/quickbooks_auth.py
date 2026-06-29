@@ -21,7 +21,7 @@ logger = logging.getLogger("agent.quickbooks_auth")
 
 # QuickBooks OAuth2 endpoints
 AUTH_URL = "https://appcenter.intuit.com/connect/oauth2"
-TOKEN_URL = "https://oauth2.platform.intuit.com/oauth2/v1/tokens/bearer"
+TOKEN_URL = "https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer"
 
 SCOPES = ["com.intuit.quickbooks.accounting"]
 
