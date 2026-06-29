@@ -24,8 +24,7 @@ Rollback to previous: `python3 elevenlabs/rollback.py sophie-before-20260629-133
 ## 20260629-142043 — slightly friendlier
 - Added a warmth/persona line to the system prompt; warmer fixed greeting ("Hey Ross, good to hear from you! What can I do for you?"); nudged TTS style up a touch if supported.
 
-## 20260629-142210 — fix "short and moody"
-- Prompt: added WARMTH FIRST rule (brief but friendly/upbeat, never curt/flat). Voice model eleven_flash_v2 -> eleven_turbo_v2_5 (warmer, more expressive). Rollback if too slow: restore a previous snapshot.
-
-## 20260629-142255 — fix "short and moody" (re-applied; prior entry did not apply due to a script error)
-- Prompt: added WARMTH FIRST rule (brief but friendly/upbeat, never curt/flat). Voice model eleven_flash_v2 -> eleven_turbo_v2_5 (warmer, more expressive). If she now feels too slow, roll back to a flash snapshot.
+## 20260629-142410 — fix "short and moody"
+- Prompt: added WARMTH FIRST rule (brief but friendly/upbeat, never curt or flat).
+- Voice model eleven_flash_v2 -> **eleven_turbo_v2** (warmer/more expressive; English agents are limited to turbo or flash v2).
+- Rollback if she feels too slow: `python3 elevenlabs/rollback.py elevenlabs/backups/<a flash_v2 snapshot>.json`.
