@@ -26,3 +26,6 @@ Rollback to previous: `python3 elevenlabs/rollback.py sophie-before-20260629-133
 
 ## 20260629-142210 — fix "short and moody"
 - Prompt: added WARMTH FIRST rule (brief but friendly/upbeat, never curt/flat). Voice model eleven_flash_v2 -> eleven_turbo_v2_5 (warmer, more expressive). Rollback if too slow: restore a previous snapshot.
+
+## 20260629-142255 — fix "short and moody" (re-applied; prior entry did not apply due to a script error)
+- Prompt: added WARMTH FIRST rule (brief but friendly/upbeat, never curt/flat). Voice model eleven_flash_v2 -> eleven_turbo_v2_5 (warmer, more expressive). If she now feels too slow, roll back to a flash snapshot.
