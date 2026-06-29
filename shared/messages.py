@@ -475,6 +475,7 @@ class MPListActivitiesPayload(BaseModel):
 
 class DailyBriefPayload(BaseModel):
     date: str | None = None  # ISO date, defaults to today
+    email_to: str | None = None  # Email address to send the brief to
 
 
 class UpdateAgentPayload(BaseModel):

@@ -704,13 +704,16 @@ async def convert_md_to_docx(req: ConvertMdToDocxRequest, _=Depends(_get_api_key
 
 class DailyBriefRequest(BaseModel):
     date: str | None = Field(default=None, description="Date in YYYY-MM-DD format (defaults to today)")
+    email_to: str | None = Field(default="r.calvert@rcsc.uk", description="Email address to send the brief to (defaults to r.calvert@rcsc.uk)")
 
 
-@router.post("/daily-brief", summary="Generate Ross's daily brief PDF. Gathers meetings, reminders, and dev tasks into a printable tick-box PDF on the Desktop.")
+@router.post("/daily-brief", summary="Generate Ross's daily brief PDF and email it. Gathers today's meetings and reminders into a printable tick-box PDF. Use for 'morning brief', 'daily brief', 'what's on today'.")
 async def daily_brief(req: DailyBriefRequest, _=Depends(_get_api_key)):
     payload: dict = {}
     if req.date:
         payload["date"] = req.date
+    if req.email_to:
+        payload["email_to"] = req.email_to
     return await _run("daily_brief", payload)
 
 

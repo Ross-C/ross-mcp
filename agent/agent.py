@@ -135,6 +135,7 @@ class Agent:
             reminders=self.reminders,
             calendar=self.calendar,
             apple_calendar=self.apple_calendar,
+            mail=self.mail,
         )
         self._running = True
         self._version = self._get_git_version()
@@ -515,7 +516,7 @@ class Agent:
                 # --- Daily Brief ---
                 case CommandType.DAILY_BRIEF:
                     p = DailyBriefPayload(**cmd.payload)
-                    result = await self.daily_brief.generate(date_str=p.date)
+                    result = await self.daily_brief.generate(date_str=p.date, email_to=p.email_to)
                 # --- Documents ---
                 case CommandType.CONVERT_MD_TO_PDF:
                     p = ConvertDocumentPayload(**cmd.payload)

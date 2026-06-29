@@ -69,12 +69,13 @@ def _format_date_display(dt: datetime) -> str:
 
 
 class DailyBriefService:
-    def __init__(self, reminders, calendar, apple_calendar):
+    def __init__(self, reminders, calendar, apple_calendar, mail=None):
         self.reminders = reminders
         self.calendar = calendar
         self.apple_calendar = apple_calendar
+        self.mail = mail
 
-    async def generate(self, date_str: str | None = None) -> dict:
+    async def generate(self, date_str: str | None = None, email_to: str | None = None) -> dict:
         """Generate the daily brief PDF for the given date (defaults to today)."""
         import asyncio
 
@@ -296,7 +297,7 @@ class DailyBriefService:
             if len(today_reminders) > 5:
                 summary_lines.append(f"  ...and {len(today_reminders) - 5} more")
 
-        return {
+        result = {
             "pdf_path": pdf_path,
             "pdf_size_bytes": pdf_size,
             "summary": "\n".join(summary_lines),
@@ -304,3 +305,34 @@ class DailyBriefService:
             "reminders": len(today_reminders),
             "date": target.strftime("%Y-%m-%d"),
         }
+
+        # Email the brief if requested
+        if email_to and self.mail:
+            try:
+                date_display = _format_date_display(target)
+                draft = await self.mail.create_draft(
+                    subject=f"Daily Brief - {date_display}",
+                    body=(
+                        '<div style="font-family:Aptos,Arial,Helvetica,sans-serif;font-size:12pt;color:rgb(0,0,0)">'
+                        f"<p>Daily brief attached for {date_display}.</p>"
+                        f"<p>{len(all_events)} meeting{_plural(len(all_events))}, "
+                        f"{len(today_reminders)} reminder{_plural(len(today_reminders))}.</p>"
+                        "</div>"
+                    ),
+                    to=[email_to],
+                    body_type="HTML",
+                )
+                draft_id = draft.get("message_id") or draft.get("id")
+                if draft_id:
+                    await self.mail.add_attachment(
+                        message_id=draft_id,
+                        file_path=pdf_path,
+                        filename=f"Daily Brief - {target.strftime('%d-%m-%Y')}.pdf",
+                    )
+                    await self.mail.send_draft(message_id=draft_id)
+                    result["emailed_to"] = email_to
+            except Exception as e:
+                logger.warning(f"Failed to email daily brief: {e}")
+                result["email_error"] = str(e)
+
+        return result

@@ -836,15 +836,18 @@ async def rcsc_close_ticket(ticket_id: str) -> str:
 
 
 @mcp.tool()
-async def daily_brief(date: str | None = None) -> str:
-    """Generate Ross's daily brief as a printable PDF. Gathers today's meetings (Outlook + iCloud), reminders, in-progress dev tasks, and overdue tasks into a single tick-box PDF saved to the Desktop. Use when Ross asks for a "daily brief", "print my day", or "what's on today".
+async def daily_brief(date: str | None = None, email_to: str | None = "r.calvert@rcsc.uk") -> str:
+    """Generate Ross's daily brief as a printable PDF and email it to him. Gathers today's meetings (Outlook + iCloud) and reminders scheduled for today into a tick-box PDF. Use when Ross asks for a "daily brief", "morning brief", "print my day", or "what's on today".
 
     Args:
         date: Optional date in YYYY-MM-DD format (defaults to today)
+        email_to: Email address to send the brief to (defaults to r.calvert@rcsc.uk)
     """
     payload: dict = {}
     if date:
         payload["date"] = date
+    if email_to:
+        payload["email_to"] = email_to
     result = await _send("daily_brief", payload)
     return json.dumps(result, indent=2)
 
