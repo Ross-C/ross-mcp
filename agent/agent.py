@@ -78,6 +78,7 @@ from shared.messages import (
     MPListCustomersPayload,
     MPGetCustomerPayload,
     MPCreateCustomerPayload,
+    MPCreateProjectPayload,
     MPLogActivityPayload,
     MPListActivitiesPayload,
     QBRealmPayload,
@@ -241,6 +242,7 @@ class Agent:
                             CommandType.MP_LIST_CUSTOMERS,
                             CommandType.MP_GET_CUSTOMER,
                             CommandType.MP_CREATE_CUSTOMER,
+                            CommandType.MP_CREATE_PROJECT,
                             CommandType.MP_LOG_ACTIVITY,
                             CommandType.MP_LIST_ACTIVITIES,
                         ])
@@ -552,6 +554,9 @@ class Agent:
                 case CommandType.MP_CREATE_CUSTOMER:
                     p = MPCreateCustomerPayload(**cmd.payload)
                     result = await self.mp_portal.create_customer(**p.model_dump())
+                case CommandType.MP_CREATE_PROJECT:
+                    p = MPCreateProjectPayload(**cmd.payload)
+                    result = await self.mp_portal.create_project(**p.model_dump())
                 case CommandType.MP_LOG_ACTIVITY:
                     p = MPLogActivityPayload(**cmd.payload)
                     result = await self.mp_portal.log_activity(**p.model_dump())

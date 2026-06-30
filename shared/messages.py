@@ -86,6 +86,7 @@ class CommandType(str, Enum):
     MP_LIST_CUSTOMERS = "mp_list_customers"
     MP_GET_CUSTOMER = "mp_get_customer"
     MP_CREATE_CUSTOMER = "mp_create_customer"
+    MP_CREATE_PROJECT = "mp_create_project"
     MP_LOG_ACTIVITY = "mp_log_activity"
     MP_LIST_ACTIVITIES = "mp_list_activities"
     # QuickBooks
@@ -482,6 +483,18 @@ class MPCreateCustomerPayload(BaseModel):
     email: str | None = None
     phone: str | None = None
     website: str | None = None
+    notes: str | None = None
+
+
+class MPCreateProjectPayload(BaseModel):
+    customer_id: int
+    name: str
+    prefix: str
+    description: str | None = None
+    production_url: str | None = None
+    deployment_location: str | None = None
+    git_repository: str | None = None
+    git_branch: str | None = None
     notes: str | None = None
 
 

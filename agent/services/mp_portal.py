@@ -384,6 +384,17 @@ class MPPortalService:
             resp.raise_for_status()
             return resp.json()
 
+    async def create_project(self, **fields) -> dict:
+        """Create a project under a customer. Omits keys whose value is None."""
+        payload = {k: v for k, v in fields.items() if v is not None}
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.post(f"{self.api_base}/projects", headers=self._headers(), json=payload)
+            resp.raise_for_status()
+            data = resp.json()
+        # Invalidate the project cache so the new project is immediately matchable.
+        self._cache_time = 0
+        return data
+
     # --- Activity audit trail ---
 
     async def log_activity(self, **fields) -> dict:

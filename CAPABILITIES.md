@@ -48,6 +48,7 @@ Both ultimately run through the local Mac agents. `✓` = available, `—` = not
 | list / get / close ticket (both desks) | ✓ | ✓ | ☐ |
 | **MP Portal — Projects & Tasks** | | | |
 | list projects / match project / list-save-delete alias | ✓ | ✓ | ☐ |
+| **create project** (confirm before create) | ✓ | ✓ | ☐ |
 | create task / update status / update / get / search task | ✓ | ✓ | ☐ |
 | in-progress / mine / overdue / recent tasks | ✓ | ✓ | ☐ |
 | outstanding summary / by-project / billable summary / recent activity | ✓ | ✓ | ☐ |

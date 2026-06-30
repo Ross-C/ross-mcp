@@ -994,6 +994,24 @@ async def mp_create_customer(req: MPCreateCustomerRequest, _=Depends(_get_api_ke
     return await _run("mp_create_customer", payload)
 
 
+class MPCreateProjectRequest(BaseModel):
+    customer_id: int = Field(description="Portal customer id the project belongs to (required)")
+    name: str = Field(description="Project name, e.g. 'WTS Portal' (required)")
+    prefix: str = Field(description="Short unique task prefix, e.g. 'WTS' (required); stored uppercased")
+    description: str | None = Field(default=None, description="What the project is")
+    production_url: str | None = Field(default=None, description="Live URL, e.g. https://wts.portal-app.uk")
+    git_repository: str | None = Field(default=None, description="Repo, e.g. 'RCSC-NW/wts.portal-app.uk'")
+    git_branch: str | None = Field(default=None, description="Default branch, e.g. 'main'")
+    deployment_location: str | None = Field(default=None, description="Where it's hosted/deployed")
+    notes: str | None = Field(default=None, description="Free-text notes")
+
+
+@router.post("/mp-create-project", summary="Create a new MP Portal project under a customer. Confirm the full details with Ross before calling — this inserts a project.")
+async def mp_create_project(req: MPCreateProjectRequest, _=Depends(_get_api_key)):
+    payload = {k: v for k, v in req.model_dump().items() if v is not None}
+    return await _run("mp_create_project", payload)
+
+
 # =====================
 # QuickBooks
 # =====================

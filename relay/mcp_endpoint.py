@@ -1325,6 +1325,46 @@ async def mp_create_customer(
 
 
 @mcp.tool()
+async def mp_create_project(
+    customer_id: int,
+    name: str,
+    prefix: str,
+    description: str | None = None,
+    production_url: str | None = None,
+    git_repository: str | None = None,
+    git_branch: str | None = None,
+    deployment_location: str | None = None,
+    notes: str | None = None,
+) -> str:
+    """Create a new project under a customer in the MP Portal. ALWAYS read the full details back to Ross and get his explicit agreement before calling — this inserts a project record. Run mp_list_projects first to avoid duplicates, and mp_list_customers to confirm the customer_id. The prefix is the short task code (e.g. 'WTS' gives task ids like WTS-0001) and must be unique; it is stored uppercased.
+
+    Args:
+        customer_id: Portal customer id the project belongs to (required).
+        name: Project name, e.g. 'WTS Portal' (required).
+        prefix: Short unique task prefix, e.g. 'WTS' (required).
+        description: What the project is.
+        production_url: Live URL, e.g. https://wts.portal-app.uk.
+        git_repository: Repo, e.g. 'RCSC-NW/wts.portal-app.uk'.
+        git_branch: Default branch, e.g. 'main'.
+        deployment_location: Where it's hosted/deployed.
+        notes: Free-text notes.
+    """
+    payload: dict = {"customer_id": customer_id, "name": name, "prefix": prefix}
+    for key, value in {
+        "description": description,
+        "production_url": production_url,
+        "git_repository": git_repository,
+        "git_branch": git_branch,
+        "deployment_location": deployment_location,
+        "notes": notes,
+    }.items():
+        if value is not None:
+            payload[key] = value
+    result = await _send("mp_create_project", payload)
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
 async def mp_log_activity(
     customer_id: int,
     title: str,
