@@ -60,7 +60,11 @@ A new skill must be added **across the board** so Claude AND Sophie (11Labs) bot
 
 **Capabilities (tools — auto-discovered via `tools/list`):**
 - `missing_invoices { from?, to?, supplier_id? }` — transactions still missing a receipt/invoice for a date range (defaults to last 30 days). Returns `transaction_id`, date, supplier, amount, reference.
-- `push_invoice { transaction_id, filename, content_base64, modified_at? }` — attach ONE receipt/invoice file to a specific transaction and mark it stored. **Individual** (one file → one transaction) so THIS side decides placement.
+- `push_invoice { transaction_id?, purchase_id?, filename, content_base64, modified_at? }` — attach ONE receipt/invoice file to a specific transaction OR a purchase (split line-item / installment) and mark it stored. **Individual** so THIS side decides placement.
+- `push_invoice_to_supplier { supplier_id, filename, content_base64, on_duplicate?, modified_at? }` — fire an invoice at a supplier WITHOUT a transaction: auto-matches if confident, else lands in the Receipts queue. `on_duplicate` = skip (default) / replace / keep (dedupe by content hash+size).
+- `ai_suggest_match { supplier_id?, document_id? }` — Claude reads the supplier's unmatched documents and **proposes** which transaction each belongs to + the VAT rate. **Proposals only — nothing is applied.** Show Ross, then apply with `push_invoice`/`classify_transaction`.
+- `split_transaction { transaction_id, items:[{amount, description?, category_id?, vat_rate?, supplier_id?}] }` — ACCOUNT PAYMENT: split one transaction (e.g. an Amazon credit payment) into several purchases, each with its own invoice/VAT.
+- `create_purchase { description?, supplier_id?, category_id?, amount?, vat_rate?, transaction_ids?[] }` + `link_purchase { purchase_id, transaction_id, amount? }` — INSTALLMENTS: one purchase paid across several transactions (e.g. a Klarna iPad).
 - `list_suppliers` — id, name, bank match name.
 - `list_categories` — id, name, is_purchase. **Call this to find the category_id** (e.g. for "Payroll") before classify/bulk.
 - `classify_transaction { transaction_id, type?, category_id?, vat_rate?, invoice_status?, supplier_id? }` — set a SINGLE transaction. `supplier_id` **overrides the supplier** (the bank counterparty may differ from the real supplier — e.g. a Klarna payment that's really KRCS; the bank name is kept).
