@@ -126,6 +126,21 @@ curl -X POST https://ross-mcp-relay.fly.dev/api/command \
   -d '{"type": "create_reminder", "payload": {"title": "Buy milk"}}'
 ```
 
+## MyPurchases (invoices) — connected MCP
+
+[MyPurchases](https://mypurchases.fly.dev) is a separate private app that tracks bank transactions and whether each purchase's receipt/invoice is stored. It's connected to Claude Code as its **own MCP server** (not routed through this relay), because invoice finding is driven from local Claude Code — so it's **Claude-only** and doesn't need the relay's local-agent plumbing. (If voice/ChatGPT ever need it, add a thin relay proxy then.)
+
+Add it on a machine:
+```bash
+claude mcp add --transport http mypurchases https://mypurchases.fly.dev/api/mcp \
+  --header "Authorization: Bearer <api-key>" -s user
+```
+(key from MyPurchases → Settings → Integrations). Already added on both agents.
+
+**Tools:** `missing_invoices { from?, to?, supplier_id? }`, `push_invoice { transaction_id, filename, content_base64, modified_at? }`, `list_suppliers`, `classify_transaction`.
+
+**To add invoices:** `missing_invoices` for the date range → match each file to a transaction by supplier + amount + date → `push_invoice` (one per file). See `CLAUDE.md` for the full workflow.
+
 ## Deployment & Updates
 
 ### Deploy workflow (from any machine)

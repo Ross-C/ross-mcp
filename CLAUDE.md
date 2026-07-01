@@ -49,11 +49,35 @@ A new skill must be added **across the board** so Claude AND Sophie (11Labs) bot
 - **Fully test end to end** on each surface that exposes the skill — actually call it (e.g. via the MCP tool) and confirm the round trip. Don't assume; verify.
 - **PRODUCTION SAFETY (always remember):** the portal is the **live production app**. NEVER run `migrate:fresh`/`migrate:refresh`/`db:wipe`. Never drop or destructively alter data without explicit permission. Migrations must be additive; back up the prod DB before any schema change; flag anything destructive and get a yes first.
 
+## MyPurchases (connected MCP server)
+
+**MyPurchases** is a separate private app (Ross-only) that tracks bank transactions (Starling) and whether each purchase has its receipt/invoice stored. It is connected to Claude Code as its **own MCP server** — added via `claude mcp add` on **both** agents (Mac Mini + MacBook), **not** routed through this relay. So at this stage it's available to **Claude Code only** (not Sophie/ChatGPT).
+
+- **App / dashboard:** https://mypurchases.fly.dev
+- **MCP endpoint:** `https://mypurchases.fly.dev/api/mcp` (streamable-http, JSON-RPC 2.0)
+- **Auth:** `Authorization: Bearer <api-key>` (key generated in MyPurchases → Settings → Integrations)
+- **Server name in Claude Code:** `mypurchases`
+
+**Capabilities (tools — auto-discovered via `tools/list`):**
+- `missing_invoices { from?, to?, supplier_id? }` — transactions still missing a receipt/invoice for a date range (defaults to last 30 days). Returns `transaction_id`, date, supplier, amount, reference.
+- `push_invoice { transaction_id, filename, content_base64, modified_at? }` — attach ONE receipt/invoice file to a specific transaction and mark it stored. **Individual** (one file → one transaction) so THIS side decides placement.
+- `list_suppliers` — id, name, bank match name.
+- `classify_transaction { transaction_id, type?, category_id?, vat_rate?, invoice_status? }` — set classification.
+
+**Workflow — adding invoices / "what am I missing?" (this is the logic to use):**
+1. Call `missing_invoices` for the date range Ross means. Present the outstanding transactions (supplier · date · amount).
+2. For each invoice file Ross has (email attachment, download, scan), work out which transaction it belongs to by **matching supplier + amount + date**. If ambiguous, ask Ross — never guess.
+3. Read the file, base64-encode it, and call `push_invoice` with that `transaction_id`, the filename, and `content_base64`. **One call per invoice.**
+4. Confirm each result (`status: "attached"`, `invoice_status: "stored"`).
+
+MyPurchases is a peer MCP, not a relay tool, so it is NOT part of the "Adding New Tools" propagation checklist below. To add it to a new machine: `claude mcp add --transport http mypurchases https://mypurchases.fly.dev/api/mcp --header "Authorization: Bearer <key>" -s user`.
+
 ## Clients
 
 ### Claude Code / Claude Desktop / Claude Web
 - MCP server: `https://ross-mcp-relay.fly.dev/mcp/mcp` (streamable-http, Bearer token auth)
 - Email style rules embedded in MCP `instructions` and tool docstrings
+- Also connected: **`mypurchases`** MCP (see the MyPurchases section above) — Claude-only, direct (not via relay).
 
 ### ChatGPT Custom GPT
 - Actions imported from: `https://ross-mcp-relay.fly.dev/openapi.json`

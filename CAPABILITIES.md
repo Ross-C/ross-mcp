@@ -61,6 +61,19 @@ Both ultimately run through the local Mac agents. `✓` = available, `—` = not
 | local weather | — | ✓ | ☐ |
 | submit feedback / update agent / agent status | ✓ | partial | ☐ |
 
+## MyPurchases (external MCP — Claude only)
+
+A separate private app (https://mypurchases.fly.dev) connected **directly to Claude Code** (`claude mcp add`, both agents), **not** via this relay — so Claude only, not Sophie. Endpoint `https://mypurchases.fly.dev/api/mcp` (bearer API key). Tracks bank transactions and whether each purchase's receipt/invoice is stored.
+
+| Skill | Claude | Sophie | Verified |
+|---|:--:|:--:|:--:|
+| `missing_invoices` — what's missing by date range | ✓ | — | ☐ |
+| `push_invoice` — attach a receipt/invoice to a transaction | ✓ | — | ☐ |
+| `list_suppliers` | ✓ | — | ☐ |
+| `classify_transaction` | ✓ | — | ☐ |
+
+Workflow to add invoices: `missing_invoices` → match each file to a transaction by supplier+amount+date → `push_invoice` (one per file). See the MyPurchases section in `CLAUDE.md`.
+
 **Surface differences to remember**
 - **Activity logging** (`mp_log_activity` / `mp_list_activities`) is **Claude-only** on purpose — Sophie/11Labs doesn't log dev activity.
 - **Local weather** is **Sophie-only**.
