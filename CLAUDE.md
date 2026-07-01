@@ -62,8 +62,9 @@ A new skill must be added **across the board** so Claude AND Sophie (11Labs) bot
 - `missing_invoices { from?, to?, supplier_id? }` — transactions still missing a receipt/invoice for a date range (defaults to last 30 days). Returns `transaction_id`, date, supplier, amount, reference.
 - `push_invoice { transaction_id, filename, content_base64, modified_at? }` — attach ONE receipt/invoice file to a specific transaction and mark it stored. **Individual** (one file → one transaction) so THIS side decides placement.
 - `list_suppliers` — id, name, bank match name.
-- `classify_transaction { transaction_id, type?, category_id?, vat_rate?, invoice_status? }` — set a SINGLE transaction.
-- `bulk_classify { supplier_id?, search?, from?, to?, type?, category_id?, vat_rate?, invoice_status?, make_default?, dry_run? }` — apply a classification to EVERY matching transaction (e.g. all "Holly Calvert" → Payroll). `make_default` also stores it as the supplier's default for future imports.
+- `classify_transaction { transaction_id, type?, category_id?, vat_rate?, invoice_status?, supplier_id? }` — set a SINGLE transaction. `supplier_id` **overrides the supplier** (the bank counterparty may differ from the real supplier — e.g. a Klarna payment that's really KRCS; the bank name is kept).
+- `bulk_classify { supplier_id?, search?, from?, to?, type?, category_id?, vat_rate?, invoice_status?, set_supplier_id?, make_default?, dry_run? }` — apply to EVERY matching transaction (e.g. all "Holly Calvert" → Payroll, or all "Klarna" → supplier KRCS via `set_supplier_id`). `make_default` stores it as the supplier's default for future imports.
+- `create_supplier { name }` — create a supplier not in the bank feed (e.g. KRCS), returns its id so a transaction can be reassigned to it.
 - `backup_database {}` — on-demand DB backup to DigitalOcean Spaces.
 
 **⚠️ Safety — ALWAYS (Ross's rule):**
