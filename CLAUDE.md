@@ -66,15 +66,19 @@ A new skill must be added **across the board** so Claude AND Sophie (11Labs) bot
 - `split_transaction { transaction_id, items:[{amount, description?, category_id?, vat_rate?, supplier_id?}] }` — ACCOUNT PAYMENT: split one transaction (e.g. an Amazon credit payment) into several purchases, each with its own invoice/VAT.
 - `create_purchase { description?, supplier_id?, category_id?, amount?, vat_rate?, transaction_ids?[] }` + `link_purchase { purchase_id, transaction_id, amount? }` — INSTALLMENTS: one purchase paid across several transactions (e.g. a Klarna iPad).
 - `list_suppliers` — id, name, bank match name.
-- `list_categories` — id, name, is_purchase. **Call this to find the category_id** (e.g. for "Payroll") before classify/bulk.
+- `list_categories` — id, name, is_purchase, default_type. **Call this to find the category_id** (e.g. for "Payroll") before classify/bulk. `default_type` = the type a category forces on its transactions (e.g. Payroll/Pension/Bank Charges → other, Drawings → drawing).
 - `classify_transaction { transaction_id, type?, category_id?, vat_rate?, invoice_status?, supplier_id? }` — set a SINGLE transaction. `supplier_id` **overrides the supplier** (the bank counterparty may differ from the real supplier — e.g. a Klarna payment that's really KRCS; the bank name is kept).
 - `bulk_classify { supplier_id?, search?, from?, to?, type?, category_id?, vat_rate?, invoice_status?, set_supplier_id?, make_default?, dry_run? }` — apply to EVERY matching transaction (e.g. all "Holly Calvert" → Payroll, or all "Klarna" → supplier KRCS via `set_supplier_id`). `make_default` stores it as the supplier's default for future imports.
 - `create_supplier { name }` — create a supplier not in the bank feed (e.g. KRCS), returns its id so a transaction can be reassigned to it.
+- `search_activity { q?, source?, subject?, limit? }` — search the **audit trail** (every change with before/after + source web/mcp/feed/rule/ai). Use to check what changed or trace something that went wrong automatically. `source` ∈ web|mcp|feed|rule|ai|system; `subject` ∈ Transaction|Supplier|Category|Purchase|Document.
+- `process_dropbox_pickup {}` — pull loose receipts from the Dropbox `/Purchases/Pickup` folder into the Receipts queue (moves originals to `/Pickup/Processed`). Requires Dropbox connected + enabled in Settings.
 - `backup_database {}` — on-demand DB backup to DigitalOcean Spaces.
 
 **⚠️ Safety — ALWAYS (Ross's rule):**
 - **Confirm before adding anything** (a document/invoice) or making any change. Never write on Ross's behalf without a clear yes.
 - **Bulk actions require a two-step + backup offer:** for `bulk_classify`, FIRST call with `dry_run: true`, show Ross the count + sample, and **offer to take a database backup** (`backup_database`) first. Only call again with `dry_run: false` after he explicitly confirms. Same for anything that changes many rows.
+- **Existing invoices are protected:** the server refuses any attempt by the MCP to replace or delete a stored receipt/invoice (e.g. `push_invoice_to_supplier` with `on_duplicate: replace`) — that's manual (web UI) only. Don't try to work around it.
+- **Everything the MCP does is audited** (source `mcp`), so it's all traceable via `search_activity`.
 
 **Workflow — adding invoices / "what am I missing?" (this is the logic to use):**
 1. Call `missing_invoices` for the date range Ross means. Present the outstanding transactions (supplier · date · amount).

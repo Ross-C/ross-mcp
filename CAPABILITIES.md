@@ -76,9 +76,11 @@ A separate private app (https://mypurchases.fly.dev) connected **directly to Cla
 | `list_categories` — find a category id (e.g. Payroll) | ✓ | — | ☐ |
 | `classify_transaction` (single) | ✓ | — | ☐ |
 | `bulk_classify` (e.g. all Holly Calvert → Payroll) | ✓ | — | ☐ |
+| `search_activity` — search the audit trail (every change + before/after + source) | ✓ | — | ☐ |
+| `process_dropbox_pickup` — file loose receipts from the Dropbox pickup folder | ✓ | — | ☐ |
 | `backup_database` (on-demand DB snapshot) | ✓ | — | ☐ |
 
-Workflow to add invoices: `missing_invoices` → match each file to a transaction by supplier+amount+date → `push_invoice` (one per file). **Bulk actions:** always `dry_run` first, confirm the count, offer a `backup_database` snapshot, then apply. See the MyPurchases section in `CLAUDE.md`.
+Workflow to add invoices: `missing_invoices` → match each file to a transaction by supplier+amount+date → `push_invoice` (one per file). **Bulk actions:** always `dry_run` first, confirm the count, offer a `backup_database` snapshot, then apply. **Existing invoices can't be replaced/deleted via MCP** (manual-only); everything the MCP does is **audited** and searchable via `search_activity`. See the MyPurchases section in `CLAUDE.md`.
 
 **Surface differences to remember**
 - **Activity logging** (`mp_log_activity` / `mp_list_activities`) is **Claude-only** on purpose — Sophie/11Labs doesn't log dev activity.
