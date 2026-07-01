@@ -70,9 +70,11 @@ A separate private app (https://mypurchases.fly.dev) connected **directly to Cla
 | `missing_invoices` — what's missing by date range | ✓ | — | ☐ |
 | `push_invoice` — attach a receipt/invoice to a transaction | ✓ | — | ☐ |
 | `list_suppliers` | ✓ | — | ☐ |
-| `classify_transaction` | ✓ | — | ☐ |
+| `classify_transaction` (single) | ✓ | — | ☐ |
+| `bulk_classify` (e.g. all Holly Calvert → Payroll) | ✓ | — | ☐ |
+| `backup_database` (on-demand DB snapshot) | ✓ | — | ☐ |
 
-Workflow to add invoices: `missing_invoices` → match each file to a transaction by supplier+amount+date → `push_invoice` (one per file). See the MyPurchases section in `CLAUDE.md`.
+Workflow to add invoices: `missing_invoices` → match each file to a transaction by supplier+amount+date → `push_invoice` (one per file). **Bulk actions:** always `dry_run` first, confirm the count, offer a `backup_database` snapshot, then apply. See the MyPurchases section in `CLAUDE.md`.
 
 **Surface differences to remember**
 - **Activity logging** (`mp_log_activity` / `mp_list_activities`) is **Claude-only** on purpose — Sophie/11Labs doesn't log dev activity.

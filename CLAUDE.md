@@ -62,7 +62,13 @@ A new skill must be added **across the board** so Claude AND Sophie (11Labs) bot
 - `missing_invoices { from?, to?, supplier_id? }` — transactions still missing a receipt/invoice for a date range (defaults to last 30 days). Returns `transaction_id`, date, supplier, amount, reference.
 - `push_invoice { transaction_id, filename, content_base64, modified_at? }` — attach ONE receipt/invoice file to a specific transaction and mark it stored. **Individual** (one file → one transaction) so THIS side decides placement.
 - `list_suppliers` — id, name, bank match name.
-- `classify_transaction { transaction_id, type?, category_id?, vat_rate?, invoice_status? }` — set classification.
+- `classify_transaction { transaction_id, type?, category_id?, vat_rate?, invoice_status? }` — set a SINGLE transaction.
+- `bulk_classify { supplier_id?, search?, from?, to?, type?, category_id?, vat_rate?, invoice_status?, make_default?, dry_run? }` — apply a classification to EVERY matching transaction (e.g. all "Holly Calvert" → Payroll). `make_default` also stores it as the supplier's default for future imports.
+- `backup_database {}` — on-demand DB backup to DigitalOcean Spaces.
+
+**⚠️ Safety — ALWAYS (Ross's rule):**
+- **Confirm before adding anything** (a document/invoice) or making any change. Never write on Ross's behalf without a clear yes.
+- **Bulk actions require a two-step + backup offer:** for `bulk_classify`, FIRST call with `dry_run: true`, show Ross the count + sample, and **offer to take a database backup** (`backup_database`) first. Only call again with `dry_run: false` after he explicitly confirms. Same for anything that changes many rows.
 
 **Workflow — adding invoices / "what am I missing?" (this is the logic to use):**
 1. Call `missing_invoices` for the date range Ross means. Present the outstanding transactions (supplier · date · amount).
