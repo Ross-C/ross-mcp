@@ -540,6 +540,22 @@ async def add_email_attachment(
     return json.dumps(result, indent=2)
 
 
+@mcp.tool()
+async def download_email_attachment(
+    message_id: str,
+    attachment_index: int = 0,
+) -> str:
+    """Download an attachment from an Outlook email. Returns the file as base64.
+
+    Args:
+        message_id: The email message ID (from search_emails or get_email)
+        attachment_index: Zero-based index of the attachment to download (default 0, i.e. the first attachment)
+    """
+    payload: dict = {"message_id": message_id, "attachment_index": attachment_index}
+    result = await _send("download_attachment", payload)
+    return json.dumps(result, indent=2)
+
+
 # --- Gmail Tools ---
 
 

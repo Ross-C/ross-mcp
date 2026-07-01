@@ -319,6 +319,65 @@ class OutlookMailService:
             "status": "attached",
         }
 
+    async def download_attachment(
+        self,
+        message_id: str,
+        attachment_index: int = 0,
+    ) -> dict:
+        """Download an attachment from an email by index.
+
+        Args:
+            message_id: The email message ID
+            attachment_index: Zero-based index of the attachment to download (default 0)
+        """
+        headers = await self.auth.get_headers()
+
+        # First list all attachments on the message
+        list_url = f"{GRAPH_URL}/me/messages/{message_id}/attachments"
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.get(list_url, headers=headers)
+            resp.raise_for_status()
+            data = resp.json()
+
+        attachments = data.get("value", [])
+        if not attachments:
+            return {"error": "This email has no attachments."}
+
+        if attachment_index < 0 or attachment_index >= len(attachments):
+            names = [a.get("name", "unnamed") for a in attachments]
+            return {
+                "error": f"Attachment index {attachment_index} out of range. This email has {len(attachments)} attachment(s).",
+                "attachments": names,
+            }
+
+        att = attachments[attachment_index]
+
+        # For file attachments, contentBytes is inline
+        if att.get("@odata.type") == "#microsoft.graph.fileAttachment":
+            return {
+                "name": att.get("name", "unnamed"),
+                "content_type": att.get("contentType", "application/octet-stream"),
+                "size_bytes": att.get("size", 0),
+                "content_base64": att.get("contentBytes", ""),
+                "attachment_count": len(attachments),
+            }
+
+        # For item attachments or reference attachments, fetch the raw content
+        att_id = att.get("id", "")
+        raw_url = f"{GRAPH_URL}/me/messages/{message_id}/attachments/{att_id}/$value"
+        async with httpx.AsyncClient(timeout=60) as client:
+            resp = await client.get(raw_url, headers=headers)
+            resp.raise_for_status()
+            content_b64 = base64.b64encode(resp.content).decode("utf-8")
+
+        return {
+            "name": att.get("name", "unnamed"),
+            "content_type": att.get("contentType", "application/octet-stream"),
+            "size_bytes": len(resp.content),
+            "content_base64": content_b64,
+            "attachment_count": len(attachments),
+        }
+
     async def schedule_send(self, **kwargs) -> dict:
         """BLOCKED — sending is disabled. Use create_draft instead."""
         return {"error": "Sending is disabled. Use create_draft to create a draft, then send manually from Outlook."}

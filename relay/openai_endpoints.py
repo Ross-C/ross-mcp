@@ -392,6 +392,16 @@ async def add_attachment(req: AddAttachmentRequest, _=Depends(_get_api_key)):
     return await _run("add_attachment", payload)
 
 
+class DownloadAttachmentRequest(BaseModel):
+    message_id: str = Field(description="Email message ID")
+    attachment_index: int = Field(default=0, description="Zero-based index of the attachment to download (default 0)")
+
+
+@router.post("/download-attachment", summary="Download an attachment from an Outlook email as base64")
+async def download_attachment(req: DownloadAttachmentRequest, _=Depends(_get_api_key)):
+    return await _run("download_attachment", {"message_id": req.message_id, "attachment_index": req.attachment_index})
+
+
 # =====================
 # Gmail
 # =====================
