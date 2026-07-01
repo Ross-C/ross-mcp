@@ -70,6 +70,7 @@ A separate private app (https://mypurchases.fly.dev) connected **directly to Cla
 | `missing_invoices` — what's missing by date range | ✓ | — | ☐ |
 | `push_invoice` — attach a receipt/invoice to a transaction | ✓ | — | ☐ |
 | `list_suppliers` | ✓ | — | ☐ |
+| `list_categories` — find a category id (e.g. Payroll) | ✓ | — | ☐ |
 | `classify_transaction` (single) | ✓ | — | ☐ |
 | `bulk_classify` (e.g. all Holly Calvert → Payroll) | ✓ | — | ☐ |
 | `backup_database` (on-demand DB snapshot) | ✓ | — | ☐ |
