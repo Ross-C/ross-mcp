@@ -69,7 +69,7 @@ A separate private app (https://mypurchases.fly.dev) connected **directly to Cla
 |---|:--:|:--:|:--:|
 | `missing_invoices` — what's missing by date range | ✓ | — | ☐ |
 | `push_invoice` — attach a receipt/invoice to a transaction | ✓ | — | ☐ |
-| `push_invoice_to_supplier` — fire at a supplier, auto-match or queue | ✓ | — | ☐ |
+| `push_invoice_to_supplier` — fire at a supplier; proposes a match for review (never auto-attaches) | ✓ | — | ☐ |
 | `ai_suggest_match` — Claude proposes matches + VAT (approval-gated) | ✓ | — | ☐ |
 | `split_transaction` / `create_purchase` / `link_purchase` — account payments & installments | ✓ | — | ☐ |
 | `list_suppliers` | ✓ | — | ☐ |
